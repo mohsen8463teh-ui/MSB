@@ -10,7 +10,7 @@ from backend.app.data.crypto_spot import (
 
 
 def okx_row(ts_ms, *, confirm="1", close="102"):
-    return [str(ts_ms), "100", "105", "95", close, "12", "1200", "1200", confirm]
+    return [str(int(ts_ms)), "100", "105", "95", close, "12", "1200", "1200", confirm]
 
 
 def test_okx_provider_parses_only_confirmed_candles():
