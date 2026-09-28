@@ -34,6 +34,8 @@ def test_holdout_uses_prior_history_for_warmup_but_fills_inside_test_only():
     assert result["training_period_used_for_parameter_fitting"] is False
     assert result["train_bars"] == 240
     assert result["test_bars"] == 60
+    assert result["sample_status"] == "INSUFFICIENT_TRADES"
+    assert result["minimum_closed_trades_for_screening"] == 30
     assert result["results"]["open_position"]["entry_index"] == 1
     assert result["results"]["closed_trades"] == 0
 
