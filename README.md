@@ -17,14 +17,14 @@ establish trading profitability or validate a strategy for live capital.
 - Today's potentially unfinished TSETMC candle is excluded.
 - SMA20/50/200, Wilder RSI14, Wilder ATR14, momentum, volume ratio,
   support/resistance, breakout, and descriptive regime/evidence labels.
-- Long-only backtest execution framework: next-open fills, no leverage,
-  bounded exposure, fees/slippage, one position at a time, and no forced
-  liquidation of an open final position.
+- Research-only SMA trend baseline with close-to-next-open backtest integration.
+- Long-only backtest framework with bounded exposure, costs, no leverage,
+  one position at a time, and no forced final liquidation.
 - Provider, indicator, and backtest behavior tested with deterministic fixtures.
 - The API does not issue BUY/SELL signals merely because data or indicators exist.
 
-Live exchange/TSETMC connectivity, Iran market coverage, strategy rules,
-out-of-sample validation, journaling, and the user interface remain separate
+Live exchange/TSETMC connectivity, Iran market coverage, strategy validation,
+out-of-sample testing, journaling, and the user interface remain separate
 implementation and verification tasks.
 
 ## Core principles
