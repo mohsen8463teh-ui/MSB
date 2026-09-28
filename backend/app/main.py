@@ -7,6 +7,7 @@ from .core.protocol import PROTOCOL_VERSION
 from .core.validator import validate_data_quality
 from .data.binance_spot import BinanceSpotMarketDataProvider
 from .data.placeholder import PlaceholderMarketDataProvider
+from .data.tsetmc_equity import TsetmcEquityMarketDataProvider
 
 
 app = FastAPI(
@@ -17,11 +18,14 @@ app = FastAPI(
 
 placeholder_provider = PlaceholderMarketDataProvider()
 crypto_spot_provider = BinanceSpotMarketDataProvider()
+iran_equity_provider = TsetmcEquityMarketDataProvider()
 
 
 def get_data_provider(market: str | None):
     if market == "crypto_spot":
         return crypto_spot_provider
+    if market == "iran_equity":
+        return iran_equity_provider
     return placeholder_provider
 
 

@@ -13,12 +13,16 @@ establish trading profitability or validate a strategy for live capital.
 - Fail-closed behavior when market data is missing or invalid.
 - Strict OHLCV integrity checks.
 - Read-only Binance public spot candle adapter for crypto spot.
-- Adapter behavior tested with deterministic mocked HTTP responses.
-- The API does not issue BUY/SELL signals merely because market data is available.
+- Read-only TSETMC daily-history adapter with exact-symbol matching.
+- Today's potentially unfinished TSETMC candle is excluded.
+- SMA20/50/200, Wilder RSI14, Wilder ATR14, momentum, volume ratio,
+  support/resistance, and breakout evidence.
+- Provider and indicator behavior tested with deterministic mocked responses.
+- The API does not issue BUY/SELL signals merely because data or indicators exist.
 
-Live exchange connectivity, Iran market data, analysis strategy validation,
-backtesting, journaling, and the user interface remain separate implementation
-and verification tasks.
+Live exchange/TSETMC connectivity, Iran market coverage, analysis strategy
+validation, backtesting, journaling, and the user interface remain separate
+implementation and verification tasks.
 
 ## Core principles
 

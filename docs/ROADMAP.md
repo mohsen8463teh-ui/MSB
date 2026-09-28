@@ -14,15 +14,15 @@
 
 ### Iran
 
-- [ ] TSETMC adapter
+- [x] TSETMC symbol search and daily-history adapter (mock-tested; live connectivity pending)
+- [ ] Market watch / breadth
 - [ ] Codal adapter
-- [ ] Market breadth
 - [ ] Sector data
 - [ ] News/events
 
 ### Crypto
 
-- [x] Binance public spot OHLCV adapter (mock-tested; live connectivity not yet verified)
+- [x] Binance public spot OHLCV adapter (mock-tested; live connectivity pending)
 - [ ] Additional exchange/fallback sources
 - [ ] Futures
 - [ ] Open Interest
@@ -35,12 +35,12 @@
 
 ## Phase 2 — Analysis Core
 
+- [x] SMA20/50/200
+- [x] Wilder RSI14 and ATR14
+- [x] Momentum, volume ratio, support/resistance, breakout evidence
 - [ ] Market regime
 - [ ] Market structure
-- [ ] Trend
-- [ ] Momentum
 - [ ] Liquidity
-- [ ] Volatility
 - [ ] Flow
 - [ ] Fundamental context
 - [ ] News/event context
@@ -69,21 +69,11 @@
 
 ## Phase 5 — Journal
 
-Every actionable signal must record:
-
-- Signal ID
-- Timestamp
-- Market
-- Symbol
-- Direction
-- Horizon
-- Entry
-- Stop
-- Targets
-- Data references
-- Protocol version
-- Model version
-- Final outcome
+- [ ] Signal ID and timestamp
+- [ ] Market, symbol, direction, and horizon
+- [ ] Entry, stop, and targets
+- [ ] Data references and protocol/model versions
+- [ ] Final outcome
 
 ## Phase 6 — Evaluation
 
