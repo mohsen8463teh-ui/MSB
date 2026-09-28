@@ -21,6 +21,16 @@ class ResearchDataset(BaseModel):
     candles: list[dict[str, Any]] = Field(min_length=492, max_length=10000)
 
 
+class MarketResearchRequest(BaseModel):
+    market: str = Field(pattern="^(crypto_spot|iran_equity)$")
+    symbols: list[str] = Field(min_length=1, max_length=10)
+    horizon: str = Field(pattern="^(1d|3d|1w|1m|3m|5m|6m|1y)$")
+    initial_train_bars: int = Field(default=400, ge=200, le=9000)
+    test_bars: int = Field(default=90, ge=2, le=5000)
+    simulations: int = Field(default=2000, ge=100, le=10000)
+    seed: int = Field(default=7, ge=0, le=2147483647)
+
+
 class ResearchReportRequest(BaseModel):
     datasets: list[ResearchDataset] = Field(min_length=1, max_length=10)
     initial_train_bars: int = Field(default=400, ge=200, le=9000)
@@ -83,6 +93,67 @@ async def research_report(request: ResearchReportRequest):
         )
     except (TypeError, ValueError, KeyError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@app.post("/v1/research/market")
+async def research_market(request: MarketResearchRequest):
+    """Fetch provider history, then research only quality-passing datasets."""
+    normalized = [symbol.strip() for symbol in request.symbols]
+    if any(not symbol or len(symbol) > 32 for symbol in normalized):
+        raise HTTPException(status_code=422, detail="invalid symbol")
+    if len({symbol.upper() for symbol in normalized}) != len(normalized):
+        raise HTTPException(status_code=422, detail="symbols must be unique")
+    provider = get_data_provider(request.market)
+    accepted: dict[str, list[dict[str, Any]]] = {}
+    rejected: dict[str, dict[str, Any]] = {}
+    for symbol in normalized:
+        result = await provider.get_market_data(
+            market=request.market, symbol=symbol, horizon=request.horizon
+        )
+        dataset_id = f"{symbol.upper()}:{request.horizon}"
+        if not (result.available and result.fresh and result.complete):
+            rejected[dataset_id] = {
+                "source": result.source,
+                "available": result.available,
+                "fresh": result.fresh,
+                "complete": result.complete,
+                "issues": result.issues,
+            }
+            continue
+        candles = result.data.get("candles")
+        if not isinstance(candles, list):
+            rejected[dataset_id] = {
+                "source": result.source, "issues": ["missing_candles"]
+            }
+            continue
+        accepted[dataset_id] = candles
+    if not accepted:
+        return {
+            "status": "NO_QUALITY_PASSING_DATASETS",
+            "market": request.market,
+            "horizon": request.horizon,
+            "accepted_dataset_count": 0,
+            "rejected": rejected,
+            "research_only": True,
+        }
+    try:
+        report = evaluate_research_universe(
+            accepted,
+            initial_train_bars=request.initial_train_bars,
+            test_bars=request.test_bars,
+            simulations=request.simulations,
+            seed=request.seed,
+        )
+    except (TypeError, ValueError, KeyError) as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return {
+        "status": "REPORT_CREATED",
+        "market": request.market,
+        "horizon": request.horizon,
+        "accepted_dataset_count": len(accepted),
+        "rejected": rejected,
+        "report": report,
+    }
 
 
 @app.post("/v1/analyze", response_model=AnalysisResponse)
