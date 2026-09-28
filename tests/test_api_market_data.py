@@ -151,3 +151,36 @@ def test_invalid_indicator_input_does_not_expose_exception_details(monkeypatch):
     assert body["data_quality"]["available"] is False
     assert "analysis_input_invalid" in body["data_quality"]["issues"]
     assert "provider data was invalid" in " ".join(body["reasoning"])
+
+
+
+def test_analyze_never_calculates_indicators_from_stale_or_incomplete_data(monkeypatch):
+    class QualityProvider:
+        name = "quality_provider"
+
+        async def get_market_data(self, market, symbol, horizon):
+            return MarketDataResult(
+                available=True,
+                fresh=symbol != "STALE",
+                complete=symbol != "INCOMPLETE",
+                data={"candles": valid_candles(), "as_of": 1_800_000_000.0},
+                source=self.name,
+            )
+
+    monkeypatch.setattr(main_module, "crypto_spot_provider", QualityProvider())
+    for symbol, expected_issue in (
+        ("STALE", "market_data_not_fresh"),
+        ("INCOMPLETE", "market_data_incomplete"),
+    ):
+        response = client.post("/v1/analyze", json={
+            "query": "analyze BTC for one day",
+            "market": "crypto_spot",
+            "symbol": symbol,
+        })
+        assert response.status_code == 200
+        body = response.json()
+        assert body["decision"] == "NO_TRADE"
+        assert body["data_quality"]["available"] is False
+        assert body["indicators"] is None
+        assert expected_issue in body["data_quality"]["issues"]
+        assert body["evidence"] == []
