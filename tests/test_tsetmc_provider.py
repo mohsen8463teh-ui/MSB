@@ -101,7 +101,7 @@ def test_tsetmc_provider_rejects_non_exact_symbol_match():
     assert result.issues == ["instrument_not_found"]
 
 
-def test_tsetmc_provider_fails_closed_on_block_or_http_error():
+def test_tsetmc_provider_reports_http_status():
     def handler(request):
         return httpx.Response(403)
 
@@ -114,7 +114,23 @@ def test_tsetmc_provider_fails_closed_on_block_or_http_error():
     )
 
     assert result.available is False
-    assert result.issues == ["market_data_request_failed"]
+    assert result.issues == ["tsetmc_http_403"]
+
+
+def test_tsetmc_provider_reports_network_error_type():
+    def handler(request):
+        raise httpx.ConnectError("connection unavailable")
+
+    provider = TsetmcEquityMarketDataProvider(
+        transport=httpx.MockTransport(handler),
+        clock=lambda: NOW,
+    )
+    result = asyncio.run(
+        provider.get_market_data("iran_equity", "فملی", "1d")
+    )
+
+    assert result.available is False
+    assert result.issues == ["tsetmc_network_ConnectError"]
 
 
 def test_tsetmc_provider_does_not_claim_intraday_from_daily_bars():

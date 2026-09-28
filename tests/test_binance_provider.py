@@ -66,7 +66,7 @@ def test_provider_fails_closed_for_bad_symbol_or_horizon():
     assert bad_horizon.issues == ["unsupported_or_missing_horizon"]
 
 
-def test_provider_handles_exchange_error_without_raising():
+def test_provider_reports_http_status_without_raising():
     def handler(request):
         return httpx.Response(503)
 
@@ -80,7 +80,23 @@ def test_provider_handles_exchange_error_without_raising():
 
     assert result.available is False
     assert result.data == {}
-    assert result.issues == ["market_data_request_failed"]
+    assert result.issues == ["exchange_http_503"]
+
+
+def test_provider_reports_network_error_type_without_raising():
+    def handler(request):
+        raise httpx.ConnectError("connection unavailable")
+
+    provider = BinanceSpotMarketDataProvider(
+        transport=httpx.MockTransport(handler),
+        clock=lambda: 1_700_000_000,
+    )
+    result = asyncio.run(
+        provider.get_market_data("crypto_spot", "BTCUSDT", "1d")
+    )
+
+    assert result.available is False
+    assert result.issues == ["exchange_network_ConnectError"]
 
 
 def test_provider_rejects_malformed_exchange_rows():

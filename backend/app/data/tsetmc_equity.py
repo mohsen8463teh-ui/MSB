@@ -120,7 +120,6 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                 except (TypeError, ValueError):
                     return self._unavailable("invalid_daily_history_date")
 
-                # Do not analyze today's potentially unfinished session.
                 if trading_date >= today_tehran:
                     continue
 
@@ -173,8 +172,14 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                 source=self.name,
                 issues=issues,
             )
-        except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
-            return self._unavailable("market_data_request_failed")
+        except httpx.HTTPStatusError as error:
+            return self._unavailable(f"tsetmc_http_{error.response.status_code}")
+        except httpx.RequestError as error:
+            return self._unavailable(
+                f"tsetmc_network_{type(error).__name__}"
+            )
+        except (ValueError, TypeError, KeyError, AttributeError):
+            return self._unavailable("invalid_tsetmc_response")
 
     def _unavailable(self, issue: str) -> MarketDataResult:
         return MarketDataResult(

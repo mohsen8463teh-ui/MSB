@@ -21,8 +21,8 @@ class BinanceSpotMarketDataProvider(MarketDataProvider):
         "1d": ("1h", 200, 3600),
         "3d": ("4h", 200, 14400),
         "1w": ("4h", 300, 14400),
-        "1m": ("1d", 100, 86400),
-        "3m": ("1d", 180, 86400),
+        "1m": ("1d", 220, 86400),
+        "3m": ("1d", 220, 86400),
         "5m": ("1d", 300, 86400),
         "6m": ("1d", 365, 86400),
         "1y": ("1d", 400, 86400),
@@ -75,7 +75,6 @@ class BinanceSpotMarketDataProvider(MarketDataProvider):
                 if not isinstance(row, list) or len(row) < 7:
                     return self._unavailable("malformed_exchange_candle")
                 close_time = float(row[6]) / 1000.0
-                # Exclude the currently forming candle; it is not final evidence.
                 if close_time >= now:
                     continue
                 candles.append(
@@ -122,8 +121,14 @@ class BinanceSpotMarketDataProvider(MarketDataProvider):
                 source=self.name,
                 issues=issues,
             )
-        except (httpx.HTTPError, ValueError, TypeError, IndexError, KeyError):
-            return self._unavailable("market_data_request_failed")
+        except httpx.HTTPStatusError as error:
+            return self._unavailable(f"exchange_http_{error.response.status_code}")
+        except httpx.RequestError as error:
+            return self._unavailable(
+                f"exchange_network_{type(error).__name__}"
+            )
+        except (ValueError, TypeError, IndexError, KeyError):
+            return self._unavailable("invalid_exchange_response")
 
     def _unavailable(self, issue: str) -> MarketDataResult:
         return MarketDataResult(
