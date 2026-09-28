@@ -94,3 +94,29 @@ def test_crypto_provider_failure_is_reported_without_fake_signal(monkeypatch):
     assert body["decision"] == "NO_TRADE"
     assert body["data_quality"]["available"] is False
     assert "test_source_unavailable" in body["data_quality"]["issues"]
+
+
+def test_crypto_provider_exception_returns_safe_no_trade_response(monkeypatch):
+    class RaisingProvider:
+        name = "raising_provider"
+
+        async def get_market_data(self, market, symbol, horizon):
+            raise TimeoutError("upstream secret details")
+
+    monkeypatch.setattr(main_module, "crypto_spot_provider", RaisingProvider())
+    response = client.post(
+        "/v1/analyze",
+        json={
+            "query": "analyze BTC for one day",
+            "market": "crypto_spot",
+            "symbol": "BTCUSDT",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["decision"] == "NO_TRADE"
+    assert body["data_quality"]["available"] is False
+    assert body["data_quality"]["issues"] == ["provider_error"]
+    assert body["indicators"] is None
+    assert "upstream secret details" not in response.text
