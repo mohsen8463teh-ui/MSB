@@ -1,34 +1,50 @@
 import re
+import unicodedata
 
 from .protocol import SUPPORTED_HORIZONS
 
 
-def resolve_intent(query: str) -> dict:
-    q = query.lower().strip()
+_DIGIT_TRANSLATION = str.maketrans(
+    "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩",
+    "01234567890123456789",
+)
 
+
+def _normalize_query(query: str) -> str:
+    """Normalize Persian/Arabic text and numerals without changing its meaning."""
+    value = unicodedata.normalize("NFKC", query).translate(_DIGIT_TRANSLATION)
+    value = value.replace("ي", "ی").replace("ك", "ک")
+    value = value.replace("\u200c", " ")
+    return re.sub(r"\s+", " ", value).strip().lower()
+
+
+_HORIZON_PATTERNS = (
+    (r"\b(?:intraday|intra\s*day)\b|امروز|فوری|درون\s*روزی", "intraday"),
+    (r"\b(?:1\s*day|one\s*day|24\s*hours?)\b|یک\s*روز(?:ه)?|1\s*روزه", "1d"),
+    (r"\b(?:3\s*days?|three\s*days?)\b|سه\s*روز(?:ه)?|3\s*روزه", "3d"),
+    (r"\b(?:1\s*week|one\s*week)\b|یک\s*هفته(?:ای)?", "1w"),
+    (r"\b(?:1\s*month|one\s*month)\b|یک\s*ماه(?:ه)?", "1m"),
+    (r"\b(?:3\s*months?|three\s*months?)\b|سه\s*ماه(?:ه)?", "3m"),
+    (r"\b(?:5\s*months?|five\s*months?)\b|پنج\s*ماه(?:ه)?", "5m"),
+    (r"\b(?:6\s*months?|six\s*months?)\b|شش\s*ماه(?:ه)?", "6m"),
+    (r"\b(?:1\s*year|one\s*year|12\s*months?)\b|یک\s*سال(?:ه)?", "1y"),
+)
+
+
+def resolve_intent(query: str) -> dict:
+    """Resolve a supported analysis horizon from Persian or English text."""
+    normalized = _normalize_query(query)
     horizon = None
 
-    patterns = [
-        (r"\b1\s*day\b|\bیک\s*روز\b|\bیکروزه\b", "1d"),
-        (r"\b3\s*day\b|\bسه\s*روز\b", "3d"),
-        (r"\b1\s*week\b|\bیک\s*هفته\b", "1w"),
-        (r"\b1\s*month\b|\bیک\s*ماه\b", "1m"),
-        (r"\b3\s*month\b|\bسه\s*ماه\b", "3m"),
-        (r"\b5\s*month\b|\bپنج\s*ماه\b", "5m"),
-        (r"\b6\s*month\b|\bشش\s*ماه\b", "6m"),
-        (r"\b1\s*year\b|\bیک\s*سال\b", "1y"),
-        (r"\bintraday\b|\bامروز\b|\bفوری\b", "intraday"),
-    ]
-
-    for pattern, value in patterns:
-        if re.search(pattern, q):
+    for pattern, value in _HORIZON_PATTERNS:
+        if re.search(pattern, normalized):
             horizon = value
             break
 
     return {
         "query": query,
         "horizon": horizon,
-        "raw": q,
+        "raw": normalized,
         "supported_horizon": horizon in SUPPORTED_HORIZONS
         if horizon is not None
         else False,
