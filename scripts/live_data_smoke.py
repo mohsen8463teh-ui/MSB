@@ -3,10 +3,10 @@ import json
 import sys
 from pathlib import Path
 
-# Make repository-root imports work when this file is launched as a script.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from backend.app.data.binance_spot import BinanceSpotMarketDataProvider
+from backend.app.data.crypto_spot import OkxSpotMarketDataProvider
 from backend.app.data.tsetmc_equity import TsetmcEquityMarketDataProvider
 
 
@@ -15,6 +15,13 @@ async def main():
         (
             "binance_spot",
             BinanceSpotMarketDataProvider(),
+            "crypto_spot",
+            "BTCUSDT",
+            "1d",
+        ),
+        (
+            "okx_spot",
+            OkxSpotMarketDataProvider(),
             "crypto_spot",
             "BTCUSDT",
             "1d",

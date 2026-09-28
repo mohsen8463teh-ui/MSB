@@ -7,6 +7,7 @@ on:
     paths:
       - "scripts/live_data_smoke.py"
       - "backend/app/data/binance_spot.py"
+      - "backend/app/data/crypto_spot.py"
       - "backend/app/data/tsetmc_equity.py"
       - ".github/workflows/live-data-smoke.yml"
   workflow_dispatch:

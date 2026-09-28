@@ -5,7 +5,7 @@ from .core.intent import resolve_intent
 from .core.models import AnalyzeRequest, AnalysisResponse
 from .core.protocol import PROTOCOL_VERSION
 from .core.validator import validate_data_quality
-from .data.binance_spot import BinanceSpotMarketDataProvider
+from .data.crypto_spot import FallbackCryptoSpotMarketDataProvider
 from .data.placeholder import PlaceholderMarketDataProvider
 from .data.tsetmc_equity import TsetmcEquityMarketDataProvider
 
@@ -17,7 +17,7 @@ app = FastAPI(
 )
 
 placeholder_provider = PlaceholderMarketDataProvider()
-crypto_spot_provider = BinanceSpotMarketDataProvider()
+crypto_spot_provider = FallbackCryptoSpotMarketDataProvider()
 iran_equity_provider = TsetmcEquityMarketDataProvider()
 
 
