@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 import unicodedata
 from datetime import datetime, time
@@ -41,8 +42,12 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
     ) -> None:
         import time as time_module
 
+        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be a finite positive number")
+        if not isinstance(base_url, str) or not base_url.startswith(("https://", "http://")):
+            raise ValueError("base_url must be an HTTP(S) URL")
         self.base_url = base_url.rstrip("/")
-        self.timeout_seconds = timeout_seconds
+        self.timeout_seconds = float(timeout_seconds)
         self.transport = transport
         self.clock = clock or time_module.time
 
@@ -64,7 +69,7 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
             if isinstance(raw_now, bool) or not isinstance(raw_now, (int, float)):
                 return self._unavailable("invalid_provider_clock")
             now = float(raw_now)
-            if not __import__("math").isfinite(now):
+            if not math.isfinite(now):
                 return self._unavailable("invalid_provider_clock")
             today_tehran = datetime.fromtimestamp(now, _TEHRAN).date()
         except Exception:
@@ -89,6 +94,8 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                 search_response = await client.get(search_path)
                 search_response.raise_for_status()
                 search_payload = search_response.json()
+                if not isinstance(search_payload, dict):
+                    return self._unavailable("invalid_instrument_search_payload")
                 matches = search_payload.get("instrumentSearch")
                 if not isinstance(matches, list):
                     return self._unavailable("invalid_instrument_search_payload")
@@ -114,6 +121,8 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                 )
                 history_response.raise_for_status()
                 history_payload = history_response.json()
+                if not isinstance(history_payload, dict):
+                    return self._unavailable("invalid_daily_history_payload")
                 rows = history_payload.get("closingPriceDaily")
                 if not isinstance(rows, list):
                     return self._unavailable("invalid_daily_history_payload")
