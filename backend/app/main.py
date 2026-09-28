@@ -101,6 +101,8 @@ async def analyze(request: AnalyzeRequest):
         market=request.market,
         symbol=request.symbol.upper() if request.symbol else None,
         horizon=horizon,
+        data_source=market_data.source,
+        data_as_of=market_data.data.get("as_of"),
         indicators=indicators,
         evidence=evidence,
         reasoning=reasoning,

@@ -32,7 +32,7 @@ class FakeCryptoProvider:
             available=True,
             fresh=True,
             complete=True,
-            data={"candles": valid_candles()},
+            data={"candles": valid_candles(), "as_of": 1_800_000_000.0},
             source=self.name,
         )
 
@@ -58,6 +58,8 @@ def test_crypto_market_data_and_indicators_never_create_actionable_signal(monkey
     assert body["decision"] == "NO_TRADE"
     assert body["data_quality"]["available"] is True
     assert body["indicators"]["candles_used"] == 220
+    assert body["data_source"] == "test_provider"
+    assert body["data_as_of"] == 1_800_000_000.0
     assert body["evidence"]
     assert "No validated trading strategy is enabled yet." in body["reasoning"]
 

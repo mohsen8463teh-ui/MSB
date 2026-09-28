@@ -29,6 +29,9 @@ class AnalysisResponse(BaseModel):
     symbol: str | None = None
     horizon: str | None = None
 
+    data_source: str | None = None
+    data_as_of: float | None = None
+
     entry: Any | None = None
     stop: Any | None = None
     targets: list[Any] = Field(default_factory=list)
