@@ -1,9 +1,12 @@
 from pathlib import Path
+from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 
 from .analysis.indicators import calculate_indicators
+from .backtest.research_report import evaluate_research_universe
 from .core.intent import resolve_intent
 from .core.models import AnalyzeRequest, AnalysisResponse
 from .core.protocol import PROTOCOL_VERSION
@@ -11,6 +14,19 @@ from .core.validator import validate_data_quality
 from .data.crypto_spot import FallbackCryptoSpotMarketDataProvider
 from .data.placeholder import PlaceholderMarketDataProvider
 from .data.tsetmc_equity import TsetmcEquityMarketDataProvider
+
+
+class ResearchDataset(BaseModel):
+    dataset_id: str = Field(min_length=1, max_length=100)
+    candles: list[dict[str, Any]] = Field(min_length=492, max_length=10000)
+
+
+class ResearchReportRequest(BaseModel):
+    datasets: list[ResearchDataset] = Field(min_length=1, max_length=10)
+    initial_train_bars: int = Field(default=400, ge=200, le=9000)
+    test_bars: int = Field(default=90, ge=2, le=5000)
+    simulations: int = Field(default=2000, ge=100, le=10000)
+    seed: int = Field(default=7, ge=0, le=2147483647)
 
 
 app = FastAPI(
@@ -45,6 +61,28 @@ async def health():
         "project": "MSB",
         "protocol_version": PROTOCOL_VERSION,
     }
+
+
+@app.post("/v1/research/report")
+async def research_report(request: ResearchReportRequest):
+    """Run isolated walk-forward and bootstrap research on supplied OHLCV data.
+
+    This endpoint never generates a live signal and never combines datasets.
+    """
+    ids = [item.dataset_id.strip() for item in request.datasets]
+    if len(set(ids)) != len(ids):
+        raise HTTPException(status_code=422, detail="dataset_id values must be unique")
+    datasets = {item.dataset_id.strip(): item.candles for item in request.datasets}
+    try:
+        return evaluate_research_universe(
+            datasets,
+            initial_train_bars=request.initial_train_bars,
+            test_bars=request.test_bars,
+            simulations=request.simulations,
+            seed=request.seed,
+        )
+    except (TypeError, ValueError, KeyError) as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @app.post("/v1/analyze", response_model=AnalysisResponse)
