@@ -11,7 +11,7 @@ from .core.intent import resolve_intent
 from .core.models import AnalyzeRequest, AnalysisResponse
 from .core.protocol import PROTOCOL_VERSION
 from .core.validator import validate_data_quality
-from .data.crypto_spot import FallbackCryptoSpotMarketDataProvider
+from .data.base import MarketDataResult\nfrom .data.crypto_spot import FallbackCryptoSpotMarketDataProvider
 from .data.placeholder import PlaceholderMarketDataProvider
 from .data.tsetmc_equity import TsetmcEquityMarketDataProvider
 
@@ -186,11 +186,22 @@ async def analyze(request: AnalyzeRequest):
     horizon = request.horizon or intent["horizon"]
     provider = get_data_provider(request.market)
 
-    market_data = await provider.get_market_data(
-        market=request.market,
-        symbol=request.symbol,
-        horizon=horizon,
-    )
+    try:
+        market_data = await provider.get_market_data(
+            market=request.market,
+            symbol=request.symbol,
+            horizon=horizon,
+        )
+    except Exception:
+        # Provider outages must produce a safe, explicit no-trade response.
+        market_data = MarketDataResult(
+            available=False,
+            fresh=False,
+            complete=False,
+            data={},
+            source=getattr(provider, "name", "unknown"),
+            issues=["provider_error"],
+        )
 
     quality = validate_data_quality(
         {
