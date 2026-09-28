@@ -5,16 +5,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from backend.app.analysis.indicators import calculate_indicators
+from fastapi.testclient import TestClient
+
 from backend.app.data.binance_spot import BinanceSpotMarketDataProvider
-from backend.app.data.crypto_spot import (
-    FallbackCryptoSpotMarketDataProvider,
-    OkxSpotMarketDataProvider,
-)
+from backend.app.data.crypto_spot import OkxSpotMarketDataProvider
 from backend.app.data.tsetmc_equity import TsetmcEquityMarketDataProvider
+from backend.app.main import app
 
 
-async def main():
+async def probe_providers():
     checks = (
         (
             "binance_spot",
@@ -52,31 +51,55 @@ async def main():
                 "issues": result.issues,
             }
         )
+    return report
 
-    fallback = FallbackCryptoSpotMarketDataProvider()
-    result = await fallback.get_market_data("crypto_spot", "BTCUSDT", "1d")
-    pipeline = {
-        "provider": result.source,
-        "data_ready": result.available and result.fresh and result.complete,
-        "candle_count": len(result.data.get("candles", [])),
-        "decision": "NO_TRADE",
-        "indicators": None,
-        "issues": result.issues,
-    }
-    if pipeline["data_ready"]:
-        try:
-            indicators = calculate_indicators(result.data.get("candles", []))
-            pipeline["indicators"] = {
-                "market_regime": indicators["market_regime"],
-                "rsi14": indicators["rsi14"],
-                "sma200": indicators["sma200"],
-                "candles_used": indicators["candles_used"],
-            }
-        except (KeyError, TypeError, ValueError) as error:
-            pipeline["issues"].append(
-                "indicator_error_" + type(error).__name__
+
+def probe_api():
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/v1/analyze",
+                json={
+                    "query": "analyze BTC for one day",
+                    "market": "crypto_spot",
+                    "symbol": "BTCUSDT",
+                    "horizon": "1d",
+                },
             )
-    report.append({"pipeline": pipeline})
+        if response.status_code != 200:
+            return {
+                "http_status": response.status_code,
+                "api_ok": False,
+            }
+        body = response.json()
+        return {
+            "http_status": response.status_code,
+            "api_ok": True,
+            "data_source": body["data_source"],
+            "data_ready": body["data_quality"]["available"],
+            "decision": body["decision"],
+            "market_regime": (
+                body["indicators"]["market_regime"]
+                if body["indicators"]
+                else None
+            ),
+            "candles_used": (
+                body["indicators"]["candles_used"]
+                if body["indicators"]
+                else 0
+            ),
+            "issues": body["data_quality"]["issues"],
+        }
+    except Exception as error:
+        return {
+            "api_ok": False,
+            "error_type": type(error).__name__,
+        }
+
+
+async def main():
+    report = await probe_providers()
+    report.append({"api_pipeline": probe_api()})
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
