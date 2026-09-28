@@ -42,13 +42,18 @@ def validate_ohlcv(
         }
 
     if interval_seconds is not None and (
-        isinstance(interval_seconds, bool) or interval_seconds <= 0
+        isinstance(interval_seconds, bool)
+        or not isinstance(interval_seconds, int)
+        or interval_seconds <= 0
     ):
         raise ValueError("interval_seconds must be a positive integer")
 
-    current_time = now
-    if current_time is None:
+    if now is None:
         current_time = datetime.now(timezone.utc).timestamp()
+    else:
+        current_time = _finite_number(now)
+        if current_time is None:
+            raise ValueError("now must be a finite numeric timestamp")
 
     previous_timestamp: float | None = None
 
