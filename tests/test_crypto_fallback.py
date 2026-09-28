@@ -43,6 +43,38 @@ def test_okx_provider_parses_only_confirmed_candles():
     assert result.source == "okx_spot"
 
 
+def test_okx_one_year_uses_paginated_history_and_requires_365_closed_bars():
+    now = 1_700_000_000.0
+    all_rows = [
+        okx_row((now - (index + 1) * 86400) * 1000)
+        for index in range(400)
+    ]
+
+    def handler(request):
+        assert request.url.path == "/api/v5/market/history-candles"
+        assert request.url.params["instId"] == "BTC-USDT"
+        assert request.url.params["bar"] == "1D"
+        assert request.url.params["limit"] == "100"
+        after = request.url.params.get("after")
+        rows = all_rows
+        if after is not None:
+            rows = [row for row in all_rows if int(row[0]) < int(after)]
+        return httpx.Response(200, json={"code": "0", "data": rows[:100]})
+
+    provider = OkxSpotMarketDataProvider(
+        transport=httpx.MockTransport(handler),
+        clock=lambda: now,
+    )
+    result = asyncio.run(
+        provider.get_market_data("crypto_spot", "BTCUSDT", "1y")
+    )
+
+    assert result.available is True
+    assert result.fresh is True
+    assert result.complete is True
+    assert len(result.data["candles"]) == 400
+
+
 def test_okx_provider_rejects_unsupported_symbol_format():
     provider = OkxSpotMarketDataProvider(clock=lambda: 1_700_000_000)
     result = asyncio.run(

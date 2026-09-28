@@ -17,15 +17,15 @@ class OkxSpotMarketDataProvider(MarketDataProvider):
     name = "okx_spot"
     BASE_URL = "https://www.okx.com"
     HORIZON_CONFIG = {
-        "intraday": ("15m", 300, 900),
-        "1d": ("1H", 300, 3600),
-        "3d": ("4H", 300, 14400),
-        "1w": ("4H", 300, 14400),
-        "1m": ("1D", 300, 86400),
-        "3m": ("1D", 300, 86400),
-        "5m": ("1D", 300, 86400),
-        "6m": ("1D", 300, 86400),
-        "1y": ("1D", 300, 86400),
+        "intraday": ("15m", 300, 900, 200),
+        "1d": ("1H", 300, 3600, 200),
+        "3d": ("4H", 300, 14400, 200),
+        "1w": ("4H", 300, 14400, 200),
+        "1m": ("1D", 300, 86400, 200),
+        "3m": ("1D", 300, 86400, 200),
+        "5m": ("1D", 300, 86400, 200),
+        "6m": ("1D", 300, 86400, 200),
+        "1y": ("1D", 100, 86400, 365),
     }
 
     def __init__(
@@ -51,6 +51,57 @@ class OkxSpotMarketDataProvider(MarketDataProvider):
                 return normalized[: -len(quote)] + "-" + quote
         return None
 
+    @staticmethod
+    def _validated_rows(payload: Any) -> list:
+        if not isinstance(payload, dict) or payload.get("code") != "0":
+            code = payload.get("code", "invalid") if isinstance(payload, dict) else "invalid"
+            raise ValueError(f"okx_api_error_{code}")
+        rows = payload.get("data")
+        if not isinstance(rows, list):
+            raise ValueError("invalid_okx_payload")
+        return rows
+
+    async def _fetch_1y_history(
+        self,
+        client: httpx.AsyncClient,
+        inst_id: str,
+        bar: str,
+        target_count: int,
+    ) -> list:
+        rows_by_timestamp: dict[str, list] = {}
+        after: str | None = None
+
+        for _ in range(6):
+            params = {"instId": inst_id, "bar": bar, "limit": "100"}
+            if after is not None:
+                params["after"] = after
+            response = await client.get(
+                "/api/v5/market/history-candles",
+                params=params,
+            )
+            response.raise_for_status()
+            rows = self._validated_rows(response.json())
+            if not rows:
+                break
+
+            previous_count = len(rows_by_timestamp)
+            for row in rows:
+                if not isinstance(row, list) or len(row) < 9:
+                    raise ValueError("malformed_okx_candle")
+                rows_by_timestamp[str(row[0])] = row
+
+            oldest = min(int(row[0]) for row in rows)
+            after = str(oldest)
+            if len(rows_by_timestamp) == previous_count:
+                break
+            if len(rows_by_timestamp) >= target_count:
+                break
+
+        return sorted(
+            rows_by_timestamp.values(),
+            key=lambda row: int(row[0]),
+        )
+
     async def get_market_data(
         self,
         market: str | None,
@@ -67,26 +118,28 @@ class OkxSpotMarketDataProvider(MarketDataProvider):
         if horizon not in self.HORIZON_CONFIG:
             return self._unavailable("unsupported_or_missing_horizon")
 
-        bar, limit, interval_seconds = self.HORIZON_CONFIG[horizon]
+        bar, limit, interval_seconds, min_history = self.HORIZON_CONFIG[horizon]
         try:
             async with httpx.AsyncClient(
                 base_url=self.base_url,
                 timeout=self.timeout_seconds,
                 transport=self.transport,
             ) as client:
-                response = await client.get(
-                    "/api/v5/market/candles",
-                    params={"instId": inst_id, "bar": bar, "limit": str(limit)},
-                )
-                response.raise_for_status()
-                payload: Any = response.json()
-
-            if not isinstance(payload, dict) or payload.get("code") != "0":
-                code = payload.get("code", "invalid") if isinstance(payload, dict) else "invalid"
-                return self._unavailable(f"okx_api_error_{code}")
-            rows = payload.get("data")
-            if not isinstance(rows, list):
-                return self._unavailable("invalid_okx_payload")
+                if horizon == "1y":
+                    rows = await self._fetch_1y_history(
+                        client, inst_id, bar, min_history
+                    )
+                else:
+                    response = await client.get(
+                        "/api/v5/market/candles",
+                        params={
+                            "instId": inst_id,
+                            "bar": bar,
+                            "limit": str(limit),
+                        },
+                    )
+                    response.raise_for_status()
+                    rows = self._validated_rows(response.json())
 
             now = self.clock()
             candles = []
@@ -117,7 +170,7 @@ class OkxSpotMarketDataProvider(MarketDataProvider):
                 else float("inf")
             )
             fresh = bool(checked["candles"]) and 0 <= latest_age <= interval_seconds * 2
-            enough_history = len(checked["candles"]) >= 200
+            enough_history = len(checked["candles"]) >= min_history
             complete = checked["complete"] and enough_history
             available = checked["valid"] and bool(checked["candles"])
             issues = list(checked["issues"])
@@ -126,7 +179,7 @@ class OkxSpotMarketDataProvider(MarketDataProvider):
             if not fresh:
                 issues.append("market_data_not_fresh")
             if not enough_history:
-                issues.append("insufficient_history_for_indicators")
+                issues.append("insufficient_history_for_horizon")
             return MarketDataResult(
                 available=available,
                 fresh=fresh,

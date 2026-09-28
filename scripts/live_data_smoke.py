@@ -23,11 +23,18 @@ async def probe_providers():
             "1d",
         ),
         (
-            "okx_spot",
+            "okx_spot_1d",
             OkxSpotMarketDataProvider(),
             "crypto_spot",
             "BTCUSDT",
             "1d",
+        ),
+        (
+            "okx_spot_1y",
+            OkxSpotMarketDataProvider(),
+            "crypto_spot",
+            "BTCUSDT",
+            "1y",
         ),
         (
             "tsetmc_equity",
@@ -60,10 +67,10 @@ def probe_api():
             response = client.post(
                 "/v1/analyze",
                 json={
-                    "query": "analyze BTC for one day",
+                    "query": "analyze BTC for one year",
                     "market": "crypto_spot",
                     "symbol": "BTCUSDT",
-                    "horizon": "1d",
+                    "horizon": "1y",
                 },
             )
         if response.status_code != 200:
@@ -99,7 +106,7 @@ def probe_api():
 
 async def main():
     report = await probe_providers()
-    report.append({"api_pipeline": probe_api()})
+    report.append({"api_pipeline_1y": probe_api()})
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
