@@ -81,6 +81,23 @@ def test_empty_input_fails_closed():
     }
 
 
-def test_invalid_interval_is_rejected():
-    with pytest.raises(ValueError):
-        validate_ohlcv([candle(100)], interval_seconds=0, now=200)
+@pytest.mark.parametrize("bad_interval", [0, -1, True, False, 1.5, "60"])
+def test_invalid_interval_configuration_is_rejected(bad_interval):
+    with pytest.raises(ValueError, match="positive integer"):
+        validate_ohlcv([candle(100)], interval_seconds=bad_interval, now=200)
+
+
+@pytest.mark.parametrize("bad_now", [True, False, float("nan"), float("inf"), "200", None])
+def test_invalid_explicit_clock_is_rejected(bad_now):
+    if bad_now is None:
+        return
+    with pytest.raises(ValueError, match="finite numeric timestamp"):
+        validate_ohlcv([candle(100)], now=bad_now)
+
+
+def test_boolean_ohlcv_values_are_not_treated_as_numbers():
+    result = validate_ohlcv([candle(100, close=True)], now=200)
+
+    assert result["valid"] is False
+    assert result["complete"] is False
+    assert "candle_0_contains_non_finite_or_non_numeric_values" in result["issues"]
