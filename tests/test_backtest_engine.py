@@ -112,3 +112,19 @@ def test_open_position_is_marked_not_force_closed_or_counted_as_realized_loss():
     assert result["realized_pnl"] == 0
     assert result["realized_return_pct"] == 0
     assert result["final_equity"] > result["cash_balance"]
+
+
+def test_max_drawdown_uses_marked_equity_peak():
+    result = run_long_only_backtest(
+        candles([100, 100, 80], [100, 100, 80]),
+        [True, False, False],
+        [False, True, False],
+        initial_cash=1000,
+        fee_bps=0,
+        slippage_bps=0,
+        max_exposure_fraction=1,
+    )
+
+    assert result["closed_trades"] == 1
+    assert result["final_equity"] == pytest.approx(800)
+    assert result["max_drawdown_pct"] == pytest.approx(20)
