@@ -20,13 +20,13 @@ def _normalize_query(query: str) -> str:
 
 _HORIZON_PATTERNS = (
     (r"\b(?:intraday|intra\s*day)\b|امروز|فوری|درون\s*روزی", "intraday"),
-    (r"\b(?:1\s*day|one\s*day|24\s*hours?)\b|یک\s*روز(?:ه)?|1\s*روزه", "1d"),
-    (r"\b(?:3\s*days?|three\s*days?)\b|سه\s*روز(?:ه)?|3\s*روزه", "3d"),
+    (r"\b(?:1\s*day|one\s*day|24\s*hours?)\b|(?:یک|1)\s*روز(?:ه)?", "1d"),
+    (r"\b(?:3\s*days?|three\s*days?)\b|(?:سه|3)\s*روز(?:ه)?", "3d"),
     (r"\b(?:1\s*week|one\s*week)\b|یک\s*هفته(?:ای)?", "1w"),
-    (r"\b(?:1\s*month|one\s*month)\b|یک\s*ماه(?:ه)?", "1m"),
-    (r"\b(?:3\s*months?|three\s*months?)\b|سه\s*ماه(?:ه)?", "3m"),
-    (r"\b(?:5\s*months?|five\s*months?)\b|پنج\s*ماه(?:ه)?", "5m"),
-    (r"\b(?:6\s*months?|six\s*months?)\b|شش\s*ماه(?:ه)?", "6m"),
+    (r"\b(?:1\s*month|one\s*month)\b|(?:یک|1)\s*ماه(?:ه)?", "1m"),
+    (r"\b(?:3\s*months?|three\s*months?)\b|(?:سه|3)\s*ماه(?:ه)?", "3m"),
+    (r"\b(?:5\s*months?|five\s*months?)\b|(?:پنج|5)\s*ماه(?:ه)?", "5m"),
+    (r"\b(?:6\s*months?|six\s*months?)\b|(?:شش|6)\s*ماه(?:ه)?", "6m"),
     (r"\b(?:1\s*year|one\s*year|12\s*months?)\b|یک\s*سال(?:ه)?", "1y"),
 )
 
