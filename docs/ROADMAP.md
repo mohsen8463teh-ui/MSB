@@ -81,6 +81,7 @@
 - [x] Correct separation of realized PnL and open-position equity
 - [x] Baseline strategy signal/backtest integration (synthetic tests only)
 - [x] Fixed chronological holdout evaluator (one live holdout: zero closed trades)
+- [x] Expanding-window walk-forward framework (fixed baseline; synthetic tests only)
 - [ ] Real-data walk-forward tests across multiple assets
 - [ ] Out-of-sample validation with sufficient closed trades
 - [ ] Monte Carlo
