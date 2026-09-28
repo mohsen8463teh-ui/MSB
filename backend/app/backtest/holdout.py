@@ -52,8 +52,12 @@ def evaluate_baseline_holdout(
         slippage_bps=slippage_bps,
         max_exposure_fraction=max_exposure_fraction,
     )
+    closed_trades = result["closed_trades"]
+    sample_status = "INSUFFICIENT_TRADES" if closed_trades < 30 else "TRADE_COUNT_OK_REQUIRES_FURTHER_VALIDATION"
     return {
         "method": "fixed_chronological_holdout",
+        "sample_status": sample_status,
+        "minimum_closed_trades_for_screening": 30,
         "strategy_id": signals["strategy_id"],
         "research_only": True,
         "training_period_used_for_parameter_fitting": False,
