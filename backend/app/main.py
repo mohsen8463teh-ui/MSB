@@ -107,10 +107,22 @@ async def research_market(request: MarketResearchRequest):
     accepted: dict[str, list[dict[str, Any]]] = {}
     rejected: dict[str, dict[str, Any]] = {}
     for symbol in normalized:
-        result = await provider.get_market_data(
-            market=request.market, symbol=symbol, horizon=request.horizon
-        )
         dataset_id = f"{symbol.upper()}:{request.horizon}"
+        try:
+            result = await provider.get_market_data(
+                market=request.market, symbol=symbol, horizon=request.horizon
+            )
+        except Exception as error:
+            # A single provider failure must not abort research for other symbols.
+            # Keep the public response useful without leaking exception details.
+            rejected[dataset_id] = {
+                "available": False,
+                "fresh": False,
+                "complete": False,
+                "issues": ["provider_error"],
+                "error_type": type(error).__name__,
+            }
+            continue
         if not (result.available and result.fresh and result.complete):
             rejected[dataset_id] = {
                 "source": result.source,
