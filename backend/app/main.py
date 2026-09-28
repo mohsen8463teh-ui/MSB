@@ -11,7 +11,8 @@ from .core.intent import resolve_intent
 from .core.models import AnalyzeRequest, AnalysisResponse
 from .core.protocol import PROTOCOL_VERSION
 from .core.validator import validate_data_quality
-from .data.base import MarketDataResult\nfrom .data.crypto_spot import FallbackCryptoSpotMarketDataProvider
+from .data.base import MarketDataResult
+from .data.crypto_spot import FallbackCryptoSpotMarketDataProvider
 from .data.placeholder import PlaceholderMarketDataProvider
 from .data.tsetmc_equity import TsetmcEquityMarketDataProvider
 
