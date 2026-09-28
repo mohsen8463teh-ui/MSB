@@ -72,31 +72,64 @@ def calculate_indicators(
     sma20 = _sma(closes, 20)
     sma50 = _sma(closes, 50)
     sma200 = _sma(closes, 200)
+    rsi14 = _rsi(closes, 14)
     atr14 = _atr(series, 14)
+    momentum20 = current["close"] / closes[-21] - 1
+    momentum60 = current["close"] / closes[-61] - 1
     volume_baseline = sum(volumes[-21:-1]) / 20
     volume_ratio = (
         current["volume"] / volume_baseline if volume_baseline > 0 else None
     )
     resistance20 = max(item["high"] for item in prior_20)
     support20 = min(item["low"] for item in prior_20)
+    bullish_alignment = sma20 > sma50 > sma200
+
+    if current["close"] > sma200 and sma50 > sma200 and momentum60 > 0:
+        regime = "BULLISH_TREND"
+    elif current["close"] < sma200 and sma50 < sma200 and momentum60 < 0:
+        regime = "BEARISH_TREND"
+    else:
+        regime = "RANGE_OR_MIXED"
+
+    if momentum20 > 0 and momentum60 > 0:
+        momentum_state = "POSITIVE"
+    elif momentum20 < 0 and momentum60 < 0:
+        momentum_state = "NEGATIVE"
+    else:
+        momentum_state = "MIXED"
+
+    rsi_state = "OVERBOUGHT" if rsi14 >= 70 else "OVERSOLD" if rsi14 <= 30 else "NEUTRAL"
+    volume_state = (
+        "UNKNOWN"
+        if volume_ratio is None
+        else "ELEVATED"
+        if volume_ratio >= 1.5
+        else "LOW"
+        if volume_ratio <= 0.7
+        else "NORMAL"
+    )
 
     return {
         "close": current["close"],
         "sma20": sma20,
         "sma50": sma50,
         "sma200": sma200,
-        "rsi14": _rsi(closes, 14),
+        "rsi14": rsi14,
         "atr14": atr14,
         "atr_percent": atr14 / current["close"] * 100,
-        "momentum20": current["close"] / closes[-21] - 1,
-        "momentum60": current["close"] / closes[-61] - 1,
+        "momentum20": momentum20,
+        "momentum60": momentum60,
+        "momentum_state": momentum_state,
         "volume_ratio20": volume_ratio,
+        "volume_state": volume_state,
         "support20": support20,
         "resistance20": resistance20,
         "breakout20": current["close"] > resistance20,
         "price_above_sma20": current["close"] > sma20,
         "price_above_sma50": current["close"] > sma50,
         "price_above_sma200": current["close"] > sma200,
-        "trend_alignment_bullish": sma20 > sma50 > sma200,
+        "trend_alignment_bullish": bullish_alignment,
+        "market_regime": regime,
+        "rsi_state": rsi_state,
         "candles_used": len(series),
     }

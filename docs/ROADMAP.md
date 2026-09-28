@@ -38,7 +38,7 @@
 - [x] SMA20/50/200
 - [x] Wilder RSI14 and ATR14
 - [x] Momentum, volume ratio, support/resistance, breakout evidence
-- [ ] Market regime
+- [x] Descriptive market regime and evidence states (not a trade signal)
 - [ ] Market structure
 - [ ] Liquidity
 - [ ] Flow

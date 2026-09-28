@@ -70,6 +70,10 @@ async def analyze(request: AnalyzeRequest):
         try:
             indicators = calculate_indicators(market_data.data.get("candles", []))
             evidence = [
+                f"Market regime: {indicators['market_regime']}.",
+                f"Momentum state: {indicators['momentum_state']}.",
+                f"RSI state: {indicators['rsi_state']}.",
+                f"Volume state: {indicators['volume_state']}.",
                 f"Price above SMA20: {indicators['price_above_sma20']}.",
                 f"Price above SMA50: {indicators['price_above_sma50']}.",
                 f"Price above SMA200: {indicators['price_above_sma200']}.",

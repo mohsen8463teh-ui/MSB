@@ -33,6 +33,8 @@ def test_indicators_use_only_validated_closed_candles():
     assert result["momentum60"] > 0
     assert result["breakout20"] is True
     assert result["trend_alignment_bullish"] is True
+    assert result["market_regime"] == "BULLISH_TREND"
+    assert result["rsi_state"] == "OVERBOUGHT"
 
 
 def test_indicators_refuse_insufficient_history():
