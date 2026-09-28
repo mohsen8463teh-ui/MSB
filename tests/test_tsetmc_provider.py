@@ -141,3 +141,29 @@ def test_tsetmc_provider_does_not_claim_intraday_from_daily_bars():
 
     assert result.available is False
     assert result.issues == ["unsupported_horizon_for_daily_data"]
+
+
+def test_tsetmc_provider_fails_closed_for_invalid_clock_values():
+    for bad_clock in (True, False, float("nan"), float("inf"), "200"):
+        provider = TsetmcEquityMarketDataProvider(clock=lambda value=bad_clock: value)
+        result = asyncio.run(
+            provider.get_market_data("iran_equity", "فملی", "1d")
+        )
+        assert result.available is False
+        assert result.issues == ["invalid_provider_clock"]
+
+
+def test_tsetmc_provider_fails_closed_when_clock_raises():
+    def broken_clock():
+        raise RuntimeError("clock unavailable")
+
+    provider = TsetmcEquityMarketDataProvider(clock=broken_clock)
+    try:
+        result = asyncio.run(
+            provider.get_market_data("iran_equity", "فملی", "1d")
+        )
+    except RuntimeError:
+        raise AssertionError("provider leaked clock exception")
+
+    assert result.available is False
+    assert result.issues == ["invalid_provider_clock"]
