@@ -36,6 +36,12 @@ def test_research_api_returns_separate_research_only_reports():
     assert body["research_only"] is True
     assert body["pooled_assets_or_timeframes"] is False
     assert set(body["reports"]) == {"BTC:1d", "ETH:1d"}
+    assert body["parameters"]["initial_train_bars"] == 300
+    assert body["parameters"]["test_bars"] == 80
+    assert body["parameters"]["simulations"] == 100
+    assert body["parameters"]["seed"] == 7
+    assert body["parameters"]["fee_bps"] == 10.0
+    assert body["parameters"]["slippage_bps"] == 5.0
 
 
 def test_research_api_rejects_duplicate_dataset_ids():
