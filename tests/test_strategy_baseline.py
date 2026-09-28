@@ -48,6 +48,21 @@ def test_baseline_has_no_lookahead_for_earlier_signal_values():
     assert first["exit_signals"][:240] == second["exit_signals"][:240]
 
 
+def test_baseline_is_prefix_invariant_across_multiple_cutoffs():
+    closes = [
+        100.0 + index * 0.15 + ((index % 11) - 5) * 1.7
+        for index in range(280)
+    ]
+    full_rows = candles_from_closes(closes)
+    full = generate_sma_trend_signals(full_rows)
+
+    for cutoff in (199, 200, 205, 219, 239, 259, 279):
+        prefix = generate_sma_trend_signals(full_rows[: cutoff + 1])
+        assert prefix["entry_signals"] == full["entry_signals"][: cutoff + 1]
+        assert prefix["exit_signals"] == full["exit_signals"][: cutoff + 1]
+        assert prefix["bullish_condition"] == full["bullish_condition"][: cutoff + 1]
+
+
 def test_baseline_signals_are_filled_only_at_next_open():
     rows = candles_from_closes([100.0 + index for index in range(220)])
     signals = generate_sma_trend_signals(rows)
