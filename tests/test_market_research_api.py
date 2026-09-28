@@ -75,3 +75,41 @@ def test_market_research_rejects_insufficient_history_without_failing_request(mo
     assert rejected["candle_count"] == 350
     assert rejected["minimum_required"] == 380
     assert "insufficient_history_for_requested_walk_forward" in rejected["issues"]
+
+
+
+def test_market_research_rejects_each_failed_quality_flag(monkeypatch):
+    class Provider:
+        async def get_market_data(self, market, symbol, horizon):
+            flags = {
+                "UNAVAILABLE": (False, True, True),
+                "STALE": (True, False, True),
+                "INCOMPLETE": (True, True, False),
+            }[symbol]
+            return MarketDataResult(
+                *flags,
+                {"candles": rising_candles()},
+                "quality_test",
+                ["quality_flag_failed"],
+            )
+
+    monkeypatch.setattr(main_module, "crypto_spot_provider", Provider())
+    response = client.post("/v1/research/market", json={
+        "market": "crypto_spot",
+        "symbols": ["UNAVAILABLE", "STALE", "INCOMPLETE"],
+        "horizon": "1d",
+        "initial_train_bars": 300,
+        "test_bars": 80,
+        "simulations": 100,
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "NO_QUALITY_PASSING_DATASETS"
+    assert body["accepted_dataset_count"] == 0
+    assert set(body["rejected"]) == {
+        "UNAVAILABLE:1d", "STALE:1d", "INCOMPLETE:1d"
+    }
+    assert all(
+        item["issues"] == ["quality_flag_failed"]
+        for item in body["rejected"].values()
+    )
