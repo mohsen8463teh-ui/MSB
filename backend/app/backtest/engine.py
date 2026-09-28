@@ -22,6 +22,7 @@ def run_long_only_backtest(
     Long-only, one position at a time, no leverage, explicit fees/slippage.
     A signal on the final candle is not filled because no next open exists.
     Open positions are marked to the final close, not silently liquidated.
+    Realized PnL includes closed trades only; open capital is not a loss.
     """
     if not candles:
         raise ValueError("candles must not be empty")
@@ -128,6 +129,7 @@ def run_long_only_backtest(
 
     final_equity = equity_curve[-1]["equity"]
     wins = sum(1 for trade in trades if trade["net_pnl"] > 0)
+    realized_pnl = sum(trade["net_pnl"] for trade in trades)
     open_position = None
     if position is not None:
         mark_value = position["units"] * series[-1]["close"]
@@ -141,10 +143,12 @@ def run_long_only_backtest(
 
     return {
         "initial_cash": initial_cash,
+        "cash_balance": cash,
+        "cash_balance_pct": cash / initial_cash * 100,
         "final_equity": final_equity,
-        "realized_cash": cash,
         "total_return_pct": (final_equity / initial_cash - 1) * 100,
-        "realized_return_pct": (cash / initial_cash - 1) * 100,
+        "realized_pnl": realized_pnl,
+        "realized_return_pct": realized_pnl / initial_cash * 100,
         "max_drawdown_pct": max_drawdown * 100,
         "closed_trades": len(trades),
         "wins": wins,

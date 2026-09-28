@@ -37,6 +37,8 @@ def test_signals_execute_at_next_open_not_same_close():
     assert trade["exit_index"] == 2
     assert trade["exit_price"] == 120
     assert trade["net_pnl"] == pytest.approx(1000 / 110 * 10)
+    assert result["realized_pnl"] == pytest.approx(trade["net_pnl"])
+    assert result["realized_return_pct"] == pytest.approx(trade["net_pnl"] / 1000 * 100)
 
 
 def test_final_bar_signal_is_not_filled_without_next_open():
@@ -52,6 +54,7 @@ def test_final_bar_signal_is_not_filled_without_next_open():
     assert result["closed_trades"] == 0
     assert result["open_position"] is None
     assert result["final_equity"] == 1000
+    assert result["realized_return_pct"] == 0
 
 
 def test_fees_slippage_and_exposure_never_make_cash_negative():
@@ -86,7 +89,7 @@ def test_rejects_overlapping_signal_shapes_and_invalid_parameters():
         )
 
 
-def test_open_position_is_marked_not_force_closed():
+def test_open_position_is_marked_not_force_closed_or_counted_as_realized_loss():
     result = run_long_only_backtest(
         candles([100, 105, 110], [101, 108, 115]),
         [True, False, False],
@@ -100,4 +103,7 @@ def test_open_position_is_marked_not_force_closed():
     assert result["closed_trades"] == 0
     assert result["open_position"] is not None
     assert result["open_position"]["entry_index"] == 1
-    assert result["final_equity"] > result["realized_cash"]
+    assert result["cash_balance_pct"] == pytest.approx(0)
+    assert result["realized_pnl"] == 0
+    assert result["realized_return_pct"] == 0
+    assert result["final_equity"] > result["cash_balance"]

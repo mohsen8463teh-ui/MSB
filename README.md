@@ -19,14 +19,16 @@ establish trading profitability or validate a strategy for live capital.
   support/resistance, breakout, and descriptive regime/evidence labels.
 - Research-only SMA trend baseline, next-open backtest engine, and fixed
   chronological holdout evaluator. None is enabled as a live signal.
+- Backtest reporting separates closed-trade realized PnL from open-position
+  mark-to-market equity and uninvested cash.
 - Provider, indicator, UI, and backtest behavior tested with deterministic fixtures.
 - Live GitHub-runner probe: OKX returned 399 complete daily candles for the
   one-year request; the API produced indicators and remained NO_TRADE.
   Binance returned HTTP 451; TSETMC timed out from that runner.
 
 Live connectivity from the user's own network, Iran market coverage, strategy
-validation, robust multi-asset walk-forward testing, journaling, and the full
-AI assistant interface remain separate implementation and verification tasks.
+validation, out-of-sample testing, journaling, and the full AI assistant
+interface remain separate implementation and verification tasks.
 
 ## Core principles
 
