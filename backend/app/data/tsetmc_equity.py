@@ -67,7 +67,7 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
             if not __import__("math").isfinite(now):
                 return self._unavailable("invalid_provider_clock")
             today_tehran = datetime.fromtimestamp(now, _TEHRAN).date()
-        except (OverflowError, OSError, TypeError, ValueError):
+        except Exception:
             return self._unavailable("invalid_provider_clock")
 
         headers = {
