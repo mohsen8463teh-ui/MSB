@@ -59,8 +59,17 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
         if horizon not in _SUPPORTED_DAILY_HORIZONS:
             return self._unavailable("unsupported_horizon_for_daily_data")
 
-        now = self.clock()
-        today_tehran = datetime.fromtimestamp(now, _TEHRAN).date()
+        try:
+            raw_now = self.clock()
+            if isinstance(raw_now, bool) or not isinstance(raw_now, (int, float)):
+                return self._unavailable("invalid_provider_clock")
+            now = float(raw_now)
+            if not __import__("math").isfinite(now):
+                return self._unavailable("invalid_provider_clock")
+            today_tehran = datetime.fromtimestamp(now, _TEHRAN).date()
+        except (OverflowError, OSError, TypeError, ValueError):
+            return self._unavailable("invalid_provider_clock")
+
         headers = {
             "User-Agent": _USER_AGENT,
             "Accept": "application/json",
