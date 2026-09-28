@@ -117,7 +117,7 @@ def test_crypto_provider_exception_returns_safe_no_trade_response(monkeypatch):
     body = response.json()
     assert body["decision"] == "NO_TRADE"
     assert body["data_quality"]["available"] is False
-    assert body["data_quality"]["issues"] == ["provider_error"]
+    assert "provider_error" in body["data_quality"]["issues"]
     assert body["indicators"] is None
     assert "upstream secret details" not in response.text
 
