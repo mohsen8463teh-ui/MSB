@@ -167,3 +167,80 @@ def test_tsetmc_provider_fails_closed_when_clock_raises():
 
     assert result.available is False
     assert result.issues == ["invalid_provider_clock"]
+
+
+import pytest
+
+
+@pytest.mark.parametrize("bad_timeout", [0, -1, True, False, float("nan"), float("inf"), "12"])
+def test_tsetmc_provider_rejects_invalid_timeout_configuration(bad_timeout):
+    with pytest.raises(ValueError, match="finite positive number"):
+        TsetmcEquityMarketDataProvider(timeout_seconds=bad_timeout)
+
+
+@pytest.mark.parametrize("bad_base_url", ["", "ftp://example.com/api", None, 123])
+def test_tsetmc_provider_rejects_invalid_base_url(bad_base_url):
+    with pytest.raises(ValueError, match="HTTP(S) URL"):
+        TsetmcEquityMarketDataProvider(base_url=bad_base_url)
+
+
+@pytest.mark.parametrize(
+    ("search_json", "expected_issue"),
+    [
+        ([], "invalid_instrument_search_payload"),
+        ({"instrumentSearch": {}}, "invalid_instrument_search_payload"),
+    ],
+)
+def test_tsetmc_provider_rejects_malformed_search_payload(search_json, expected_issue):
+    provider = TsetmcEquityMarketDataProvider(
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json=search_json)),
+        clock=lambda: NOW,
+    )
+    result = asyncio.run(provider.get_market_data("iran_equity", "فملی", "1d"))
+    assert result.available is False
+    assert result.issues == [expected_issue]
+
+
+@pytest.mark.parametrize(
+    ("history_json", "expected_issue"),
+    [
+        ([], "invalid_daily_history_payload"),
+        ({"closingPriceDaily": {}}, "invalid_daily_history_payload"),
+        ({"closingPriceDaily": [None]}, "malformed_daily_history_row"),
+        ({"closingPriceDaily": [{"dEven": "not-a-date"}]}, "invalid_daily_history_date"),
+    ],
+)
+def test_tsetmc_provider_rejects_malformed_history_payload(history_json, expected_issue):
+    def handler(request):
+        if "Instrument/GetInstrumentSearch" in request.url.path:
+            return httpx.Response(200, json={"instrumentSearch": [
+                {"insCode": "12345678901234567", "lVal18AFC": "فملی"}
+            ]})
+        return httpx.Response(200, json=history_json)
+
+    provider = TsetmcEquityMarketDataProvider(
+        transport=httpx.MockTransport(handler),
+        clock=lambda: NOW,
+    )
+    result = asyncio.run(provider.get_market_data("iran_equity", "فملی", "1d"))
+    assert result.available is False
+    assert result.issues == [expected_issue]
+
+
+def test_tsetmc_provider_does_not_mark_invalid_candle_fields_available():
+    def handler(request):
+        if "Instrument/GetInstrumentSearch" in request.url.path:
+            return httpx.Response(200, json={"instrumentSearch": [
+                {"insCode": "12345678901234567", "lVal18AFC": "فملی"}
+            ]})
+        rows = history_rows()
+        rows[1]["pClosing"] = "not-a-price"
+        return httpx.Response(200, json={"closingPriceDaily": rows})
+
+    provider = TsetmcEquityMarketDataProvider(
+        transport=httpx.MockTransport(handler),
+        clock=lambda: NOW,
+    )
+    result = asyncio.run(provider.get_market_data("iran_equity", "فملی", "1d"))
+    assert result.available is False
+    assert any("non_finite_or_non_numeric" in issue for issue in result.issues)
