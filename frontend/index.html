@@ -214,6 +214,25 @@
       </form>
       <div id="research-output" class="section" aria-live="polite"></div>
     </section>
+
+    <section class="card section" style="margin-top:18px" aria-live="polite">
+      <h3>پژوهش تاریخی بازار (Walk-forward)</h3>
+      <p class="sub">این بخش داده تاریخی را از منبع بازار می‌گیرد و هر نماد را جداگانه ارزیابی می‌کند؛ خروجی، سیگنال زنده نیست.</p>
+      <form id="research-form">
+        <div class="fields">
+          <div class="field"><label for="research-market">بازار</label><select id="research-market"><option value="iran_equity">بورس ایران</option><option value="crypto_spot">رمزارز اسپات</option></select></div>
+          <div class="field"><label for="research-horizon">افق داده</label><select id="research-horizon"><option value="1d">روزانه</option><option value="1w">هفتگی</option><option value="1m">ماهانه</option><option value="3m">۳ ماه</option><option value="6m">۶ ماه</option><option value="1y">۱ سال</option></select></div>
+        </div>
+        <div class="field"><label for="research-symbols">نمادها (حداکثر ۱۰، با ویرگول جدا کن)</label><input id="research-symbols" maxlength="320" required placeholder="مثلاً BTCUSDT, ETHUSDT"></div>
+        <div class="fields">
+          <div class="field"><label for="train-bars">کندل آموزش اولیه</label><input id="train-bars" type="number" min="200" max="9000" value="400" required></div>
+          <div class="field"><label for="test-bars">کندل آزمون</label><input id="test-bars" type="number" min="2" max="5000" value="90" required></div>
+        </div>
+        <button id="research-submit" type="submit">اجرای پژوهش تاریخی</button>
+        <div id="research-error" class="error" role="alert"></div>
+      </form>
+      <div id="research-output" class="section" hidden></div>
+    </section>
     <footer>M.S.B · داده ناقص = عدم صدور سیگنال · خروجی‌ها جایگزین بررسی مستقل نیستند.</footer>
   </main>
 
@@ -359,6 +378,48 @@
       } finally {
         button.disabled = false;
         button.textContent = "اجرای پژوهش";
+      }
+    });
+
+    $("research-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      $("research-error").textContent = "";
+      const button = $("research-submit");
+      button.disabled = true;
+      button.textContent = "در حال دریافت داده و ارزیابی…";
+      const output = $("research-output");
+      output.hidden = true;
+      try {
+        const symbols = $("research-symbols").value.split(",").map(x => x.trim()).filter(Boolean);
+        const response = await fetch("/v1/research/market", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({
+            market: $("research-market").value, symbols,
+            horizon: $("research-horizon").value,
+            initial_train_bars: Number($("train-bars").value),
+            test_bars: Number($("test-bars").value), simulations: 1000
+          })
+        });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.detail || "درخواست پژوهش ناموفق بود.");
+        output.replaceChildren();
+        const heading = document.createElement("h4");
+        heading.textContent = body.status === "REPORT_CREATED" ? "گزارش آماده شد" : "داده قابل قبول پیدا نشد";
+        output.appendChild(heading);
+        const summary = document.createElement("p");
+        summary.className = "sub";
+        summary.textContent = "تعداد مجموعه‌های پذیرفته‌شده: " + (body.accepted_dataset_count ?? 0) + " · نتایج مستقل هستند و با هم ادغام نشده‌اند.";
+        output.appendChild(summary);
+        const pre = document.createElement("pre");
+        pre.style.cssText = "white-space:pre-wrap;overflow-wrap:anywhere;background:#0b1525;border:1px solid var(--line);border-radius:12px;padding:12px;font:12px/1.7 monospace;direction:ltr;text-align:left;max-height:520px;overflow:auto";
+        pre.textContent = JSON.stringify(body, null, 2);
+        output.appendChild(pre);
+        output.hidden = false;
+      } catch (error) {
+        $("research-error").textContent = "خطا: " + error.message;
+      } finally {
+        button.disabled = false;
+        button.textContent = "اجرای پژوهش تاریخی";
       }
     });
     $("analysis-form").addEventListener("submit", async (event) => {
