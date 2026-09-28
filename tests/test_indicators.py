@@ -48,3 +48,27 @@ def test_indicators_refuse_invalid_ohlc():
 
     with pytest.raises(ValueError, match="invalid candle series"):
         calculate_indicators(candles)
+
+
+def test_flat_market_with_zero_volume_has_neutral_rsi_and_unknown_volume():
+    candles = [
+        {
+            "timestamp": 2_000_000.0 + index * 3600,
+            "open": 100.0,
+            "high": 101.0,
+            "low": 99.0,
+            "close": 100.0,
+            "volume": 0.0,
+        }
+        for index in range(220)
+    ]
+
+    result = calculate_indicators(candles)
+
+    assert result["rsi14"] == 50.0
+    assert result["rsi_state"] == "NEUTRAL"
+    assert result["volume_ratio20"] is None
+    assert result["volume_state"] == "UNKNOWN"
+    assert result["momentum20"] == 0.0
+    assert result["momentum60"] == 0.0
+    assert result["market_regime"] == "RANGE_OR_MIXED"
