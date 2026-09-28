@@ -23,7 +23,8 @@
 ### Crypto
 
 - [x] Binance public spot OHLCV adapter (mock-tested; runner returned HTTP 451)
-- [x] OKX public spot OHLCV adapter (mock-tested; live runner returned 299 fresh, complete candles)
+- [x] OKX public spot OHLCV adapter (live runner returned 399 completed daily bars for 1y)
+- [x] Paginated one-year OKX history
 - [x] Automatic Binance-to-OKX fallback
 - [ ] Additional exchange/fallback sources
 - [ ] Futures
@@ -88,4 +89,5 @@
 
 ## Phase 7 — User Interface
 
+- [x] Local Persian RTL analysis dashboard (API-backed; no trade execution)
 - [ ] Natural-language chat interface

@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 
 from .analysis.indicators import calculate_indicators
 from .core.intent import resolve_intent
@@ -19,6 +22,7 @@ app = FastAPI(
 placeholder_provider = PlaceholderMarketDataProvider()
 crypto_spot_provider = FallbackCryptoSpotMarketDataProvider()
 iran_equity_provider = TsetmcEquityMarketDataProvider()
+FRONTEND_FILE = Path(__file__).resolve().parents[2] / "frontend" / "index.html"
 
 
 def get_data_provider(market: str | None):
@@ -27,6 +31,11 @@ def get_data_provider(market: str | None):
     if market == "iran_equity":
         return iran_equity_provider
     return placeholder_provider
+
+
+@app.get("/", include_in_schema=False)
+async def dashboard():
+    return FileResponse(FRONTEND_FILE, media_type="text/html")
 
 
 @app.get("/health")

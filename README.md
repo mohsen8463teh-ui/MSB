@@ -8,7 +8,7 @@ establish trading profitability or validate a strategy for live capital.
 
 ## Current verified implementation
 
-- FastAPI health and analysis endpoints.
+- FastAPI health and analysis endpoints plus a local Persian RTL web dashboard.
 - Persian/English horizon parsing with explicit supported horizons.
 - Fail-closed behavior when market data is missing or invalid.
 - Strict OHLCV integrity checks.
@@ -20,14 +20,15 @@ establish trading profitability or validate a strategy for live capital.
 - Research-only SMA trend baseline with close-to-next-open backtest integration.
 - Long-only backtest framework with bounded exposure, costs, no leverage,
   one position at a time, and no forced final liquidation.
-- Provider, indicator, and backtest behavior tested with deterministic fixtures.
-- Live GitHub-runner probe: OKX returned 299 fresh, complete closed candles;
+- Provider, indicator, UI, and backtest behavior tested with deterministic fixtures.
+- Live GitHub-runner probe: OKX returned 399 fresh, complete daily candles for
+  the 1-year horizon; the API produced indicators and remained NO_TRADE.
   Binance returned HTTP 451; TSETMC timed out from that runner.
 - The API does not issue BUY/SELL signals merely because data or indicators exist.
 
 Live connectivity from the user's own network, Iran market coverage, strategy
-validation, out-of-sample testing, journaling, and the user interface remain
-separate implementation and verification tasks.
+validation, out-of-sample testing, journaling, and the full AI assistant
+interface remain separate implementation and verification tasks.
 
 ## Core principles
 
