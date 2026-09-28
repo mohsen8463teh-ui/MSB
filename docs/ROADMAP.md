@@ -77,7 +77,9 @@
 
 ## Phase 6 — Evaluation
 
-- [ ] Walk-forward testing
+- [x] Long-only next-open execution framework (not a strategy)
+- [x] Fees, slippage, exposure cap, and open-position marking
+- [ ] Walk-forward strategy tests
 - [ ] Out-of-sample testing
 - [ ] Monte Carlo
 - [ ] Drawdown
