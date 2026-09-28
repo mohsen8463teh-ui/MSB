@@ -141,7 +141,7 @@ def run_long_only_backtest(
     average_loss = -gross_loss / losses if losses else None
     profit_factor = (
         gross_profit / gross_loss if gross_loss > 0
-        else (None if gross_profit == 0 else math.inf)
+        else None
     )
     expectancy = realized_pnl / len(trades) if trades else None
     open_position = None
