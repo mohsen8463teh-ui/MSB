@@ -43,11 +43,11 @@ def test_okx_provider_parses_only_confirmed_candles():
     assert result.source == "okx_spot"
 
 
-def test_okx_one_year_uses_paginated_history_and_requires_365_closed_bars():
+def test_okx_one_year_uses_paginated_history_and_requires_500_closed_bars():
     now = 1_700_000_000.0
     all_rows = [
         okx_row((now - (index + 1) * 86400) * 1000)
-        for index in range(400)
+        for index in range(600)
     ]
 
     def handler(request):
@@ -72,7 +72,7 @@ def test_okx_one_year_uses_paginated_history_and_requires_365_closed_bars():
     assert result.available is True
     assert result.fresh is True
     assert result.complete is True
-    assert len(result.data["candles"]) == 400
+    assert len(result.data["candles"]) == 500
 
 
 def test_okx_provider_rejects_unsupported_symbol_format():
