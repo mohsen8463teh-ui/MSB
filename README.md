@@ -21,14 +21,15 @@ establish trading profitability or validate a strategy for live capital.
   chronological holdout evaluator. None is enabled as a live signal.
 - Backtest reporting separates closed-trade realized PnL from open-position
   mark-to-market equity and uninvested cash.
-- Provider, indicator, UI, and backtest behavior tested with deterministic fixtures.
+- 64 automated tests pass in GitHub Actions (one dependency deprecation warning).
 - Live GitHub-runner probe: OKX returned 399 complete daily candles for the
   one-year request; the API produced indicators and remained NO_TRADE.
-  Binance returned HTTP 451; TSETMC timed out from that runner.
+  The fixed 120-bar holdout had zero closed trades and therefore no realized
+  strategy result. Binance returned HTTP 451; TSETMC timed out from that runner.
 
 Live connectivity from the user's own network, Iran market coverage, strategy
-validation, out-of-sample testing, journaling, and the full AI assistant
-interface remain separate implementation and verification tasks.
+validation, robust multi-asset walk-forward testing, journaling, and the full
+AI assistant interface remain separate implementation and verification tasks.
 
 ## Core principles
 

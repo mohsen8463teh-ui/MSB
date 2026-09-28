@@ -78,8 +78,9 @@
 
 - [x] Long-only next-open execution framework (not a strategy)
 - [x] Fees, slippage, exposure cap, and open-position marking
+- [x] Correct separation of realized PnL and open-position equity
 - [x] Baseline strategy signal/backtest integration (synthetic tests only)
-- [x] Fixed chronological holdout evaluator (not walk-forward optimization)
+- [x] Fixed chronological holdout evaluator (one live holdout: zero closed trades)
 - [ ] Real-data walk-forward tests across multiple assets
 - [ ] Out-of-sample validation with sufficient closed trades
 - [ ] Monte Carlo
