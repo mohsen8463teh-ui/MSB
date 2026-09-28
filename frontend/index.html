@@ -370,47 +370,6 @@
       }
     });
 
-    $("research-form").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      $("research-error").textContent = "";
-      const button = $("research-submit");
-      button.disabled = true;
-      button.textContent = "در حال دریافت داده و ارزیابی…";
-      const output = $("research-output");
-      output.hidden = true;
-      try {
-        const symbols = $("research-symbols").value.split(",").map(x => x.trim()).filter(Boolean);
-        const response = await fetch("/v1/research/market", {
-          method: "POST", headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({
-            market: $("research-market").value, symbols,
-            horizon: $("research-horizon").value,
-            initial_train_bars: Number($("train-bars").value),
-            test_bars: Number($("test-bars").value), simulations: 1000
-          })
-        });
-        const body = await response.json();
-        if (!response.ok) throw new Error(body.detail || "درخواست پژوهش ناموفق بود.");
-        output.replaceChildren();
-        const heading = document.createElement("h4");
-        heading.textContent = body.status === "REPORT_CREATED" ? "گزارش آماده شد" : "داده قابل قبول پیدا نشد";
-        output.appendChild(heading);
-        const summary = document.createElement("p");
-        summary.className = "sub";
-        summary.textContent = "تعداد مجموعه‌های پذیرفته‌شده: " + (body.accepted_dataset_count ?? 0) + " · نتایج مستقل هستند و با هم ادغام نشده‌اند.";
-        output.appendChild(summary);
-        const pre = document.createElement("pre");
-        pre.style.cssText = "white-space:pre-wrap;overflow-wrap:anywhere;background:#0b1525;border:1px solid var(--line);border-radius:12px;padding:12px;font:12px/1.7 monospace;direction:ltr;text-align:left;max-height:520px;overflow:auto";
-        pre.textContent = JSON.stringify(body, null, 2);
-        output.appendChild(pre);
-        output.hidden = false;
-      } catch (error) {
-        $("research-error").textContent = "خطا: " + error.message;
-      } finally {
-        button.disabled = false;
-        button.textContent = "اجرای پژوهش تاریخی";
-      }
-    });
     $("analysis-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       $("error").textContent = "";
