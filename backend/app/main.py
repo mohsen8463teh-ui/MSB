@@ -235,10 +235,10 @@ async def analyze(request: AnalyzeRequest):
                 f"20-candle breakout: {indicators['breakout20']}.",
             ]
             reasoning.append("Market data passed integrity and freshness checks.")
-        except (KeyError, TypeError, ValueError) as error:
+        except (KeyError, TypeError, ValueError):
             quality.available = False
             quality.issues.append("analysis_input_invalid")
-            reasoning.append(f"Indicator calculation was skipped: {error}.")
+            reasoning.append("Indicator calculation was skipped because the provider data was invalid.")
     else:
         reasoning.append("Market data did not pass all quality checks.")
 
