@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -8,6 +8,8 @@ class MarketDataResult:
     fresh: bool
     complete: bool
     data: dict[str, Any]
+    source: str = "unknown"
+    issues: list[str] = field(default_factory=list)
 
 
 class MarketDataProvider:
