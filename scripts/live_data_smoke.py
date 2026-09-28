@@ -1,5 +1,10 @@
 import asyncio
 import json
+import sys
+from pathlib import Path
+
+# Make repository-root imports work when this file is launched as a script.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from backend.app.data.binance_spot import BinanceSpotMarketDataProvider
 from backend.app.data.tsetmc_equity import TsetmcEquityMarketDataProvider
