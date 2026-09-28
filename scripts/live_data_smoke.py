@@ -8,8 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fastapi.testclient import TestClient
 
-from backend.app.analysis.strategy_baseline import generate_sma_trend_signals
-from backend.app.backtest.engine import run_long_only_backtest
+from backend.app.backtest.holdout import evaluate_baseline_holdout
 from backend.app.data.binance_spot import BinanceSpotMarketDataProvider
 from backend.app.data.crypto_spot import OkxSpotMarketDataProvider
 from backend.app.data.tsetmc_equity import TsetmcEquityMarketDataProvider
@@ -66,30 +65,33 @@ async def probe_providers():
         if name == "okx_spot_1y" and result.available and result.fresh and result.complete:
             candles = result.data["candles"]
             try:
-                signals = generate_sma_trend_signals(candles)
-                backtest = run_long_only_backtest(
+                split_index = int(len(candles) * 0.7)
+                holdout = evaluate_baseline_holdout(
                     candles,
-                    signals["entry_signals"],
-                    signals["exit_signals"],
+                    split_index=split_index,
                     initial_cash=100_000,
                     fee_bps=10,
                     slippage_bps=5,
                     max_exposure_fraction=0.95,
                 )
-                item["research_backtest"] = {
-                    "strategy_id": signals["strategy_id"],
+                metrics = holdout["results"]
+                item["fixed_holdout"] = {
+                    "method": holdout["method"],
                     "research_only": True,
-                    "period_start_utc": utc_time(candles[0]["timestamp"]),
-                    "period_end_utc": utc_time(candles[-1]["timestamp"]),
-                    "closed_trades": backtest["closed_trades"],
-                    "win_rate_pct": backtest["win_rate_pct"],
-                    "total_return_pct": backtest["total_return_pct"],
-                    "max_drawdown_pct": backtest["max_drawdown_pct"],
-                    "fees_total": backtest["fees_total"],
-                    "open_position": backtest["open_position"] is not None,
+                    "training_period_used_for_parameter_fitting": False,
+                    "train_bars": holdout["train_bars"],
+                    "test_bars": holdout["test_bars"],
+                    "test_start_utc": utc_time(holdout["test_start_timestamp"]),
+                    "test_end_utc": utc_time(holdout["test_end_timestamp"]),
+                    "closed_trades": metrics["closed_trades"],
+                    "win_rate_pct": metrics["win_rate_pct"],
+                    "realized_return_pct": metrics["realized_return_pct"],
+                    "mark_to_market_return_pct": metrics["total_return_pct"],
+                    "max_drawdown_pct": metrics["max_drawdown_pct"],
+                    "open_position": metrics["open_position"] is not None,
                 }
             except (KeyError, TypeError, ValueError) as error:
-                item["research_backtest"] = {
+                item["fixed_holdout"] = {
                     "research_only": True,
                     "error_type": type(error).__name__,
                 }

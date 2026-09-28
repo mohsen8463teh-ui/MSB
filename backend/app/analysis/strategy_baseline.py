@@ -31,6 +31,7 @@ def generate_sma_trend_signals(
     closes = [item["close"] for item in series]
     entries = [False] * len(series)
     exits = [False] * len(series)
+    bullish_conditions = [False] * len(series)
     previous_bullish = False
 
     for index in range(199, len(series)):
@@ -38,6 +39,7 @@ def generate_sma_trend_signals(
         sma50 = sum(closes[index - 49 : index + 1]) / 50
         sma200 = sum(closes[index - 199 : index + 1]) / 200
         bullish = sma20 > sma50 and closes[index] > sma200
+        bullish_conditions[index] = bullish
 
         if bullish and not previous_bullish:
             entries[index] = True
@@ -49,6 +51,7 @@ def generate_sma_trend_signals(
         "strategy_id": STRATEGY_ID,
         "entry_signals": entries,
         "exit_signals": exits,
+        "bullish_condition": bullish_conditions,
         "signal_timing": "candle_close",
         "execution_timing": "next_candle_open",
         "research_only": True,

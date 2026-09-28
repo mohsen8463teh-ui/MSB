@@ -17,18 +17,16 @@ establish trading profitability or validate a strategy for live capital.
 - Today's potentially unfinished TSETMC candle is excluded.
 - SMA20/50/200, Wilder RSI14, Wilder ATR14, momentum, volume ratio,
   support/resistance, breakout, and descriptive regime/evidence labels.
-- Research-only SMA trend baseline with close-to-next-open backtest integration.
-- Long-only backtest framework with bounded exposure, costs, no leverage,
-  one position at a time, and no forced final liquidation.
+- Research-only SMA trend baseline, next-open backtest engine, and fixed
+  chronological holdout evaluator. None is enabled as a live signal.
 - Provider, indicator, UI, and backtest behavior tested with deterministic fixtures.
-- Live GitHub-runner probe: OKX returned 399 fresh, complete daily candles for
-  the 1-year horizon; the API produced indicators and remained NO_TRADE.
+- Live GitHub-runner probe: OKX returned 399 complete daily candles for the
+  one-year request; the API produced indicators and remained NO_TRADE.
   Binance returned HTTP 451; TSETMC timed out from that runner.
-- The API does not issue BUY/SELL signals merely because data or indicators exist.
 
 Live connectivity from the user's own network, Iran market coverage, strategy
-validation, out-of-sample testing, journaling, and the full AI assistant
-interface remain separate implementation and verification tasks.
+validation, robust multi-asset walk-forward testing, journaling, and the full
+AI assistant interface remain separate implementation and verification tasks.
 
 ## Core principles
 
