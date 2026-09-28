@@ -128,3 +128,27 @@ def test_max_drawdown_uses_marked_equity_peak():
     assert result["closed_trades"] == 1
     assert result["final_equity"] == pytest.approx(800)
     assert result["max_drawdown_pct"] == pytest.approx(20)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"initial_cash": True},
+        {"initial_cash": "1000"},
+        {"fee_bps": True},
+        {"fee_bps": "10"},
+        {"slippage_bps": True},
+        {"slippage_bps": "5"},
+        {"max_exposure_fraction": True},
+        {"max_exposure_fraction": "0.5"},
+    ],
+)
+def test_rejects_boolean_and_nonnumeric_risk_parameters(kwargs):
+    rows = candles([100, 101], [100, 101])
+    with pytest.raises(ValueError):
+        run_long_only_backtest(
+            rows,
+            [False, False],
+            [False, False],
+            **kwargs,
+        )
