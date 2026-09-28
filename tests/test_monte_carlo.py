@@ -1,14 +1,15 @@
 import pytest
 from backend.app.backtest.monte_carlo import bootstrap_trade_returns
 
-def sample(n, value=1.0):
-    return [{"return_pct": value} for _ in range(n)]
+def sample(n, value=100.0):
+    return [{"net_pnl": value} for _ in range(n)]
 
 def test_bootstrap_is_reproducible_and_not_a_forecast():
     a = bootstrap_trade_returns(sample(30), simulations=200, seed=42)
     assert a == bootstrap_trade_returns(sample(30), simulations=200, seed=42)
     assert a["status"] == "ESTIMATE_ONLY_NOT_A_FORECAST"
     assert a["results"]["probability_of_loss_pct"] == 0
+    assert a["results"]["final_equity_median"] == 103000.0
 
 def test_bootstrap_gates_insufficient_sample():
     result = bootstrap_trade_returns(sample(29), simulations=100)
@@ -22,7 +23,7 @@ def test_invalid_configuration_rejected(kwargs):
     with pytest.raises(ValueError):
         bootstrap_trade_returns(sample(30), **kwargs)
 
-@pytest.mark.parametrize("value", [float("nan"), float("inf"), -100, True, None])
-def test_invalid_trade_return_rejected(value):
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), True, None, "bad"])
+def test_invalid_trade_pnl_rejected(value):
     with pytest.raises(ValueError):
-        bootstrap_trade_returns([{"return_pct": value}] * 30, simulations=100)
+        bootstrap_trade_returns([{"net_pnl": value}] * 30, simulations=100)
