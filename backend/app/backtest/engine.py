@@ -130,6 +130,20 @@ def run_long_only_backtest(
     final_equity = equity_curve[-1]["equity"]
     wins = sum(1 for trade in trades if trade["net_pnl"] > 0)
     realized_pnl = sum(trade["net_pnl"] for trade in trades)
+    gross_profit = sum(trade["net_pnl"] for trade in trades if trade["net_pnl"] > 0)
+    gross_loss = -sum(trade["net_pnl"] for trade in trades if trade["net_pnl"] < 0)
+    losses = len(trades) - wins
+    average_trade_return_pct = (
+        sum(trade["return_pct"] for trade in trades) / len(trades)
+        if trades else None
+    )
+    average_win = gross_profit / wins if wins else None
+    average_loss = -gross_loss / losses if losses else None
+    profit_factor = (
+        gross_profit / gross_loss if gross_loss > 0
+        else (None if gross_profit == 0 else math.inf)
+    )
+    expectancy = realized_pnl / len(trades) if trades else None
     open_position = None
     if position is not None:
         mark_value = position["units"] * series[-1]["close"]
@@ -152,6 +166,14 @@ def run_long_only_backtest(
         "max_drawdown_pct": max_drawdown * 100,
         "closed_trades": len(trades),
         "wins": wins,
+        "losses": losses,
+        "gross_profit": gross_profit,
+        "gross_loss": gross_loss,
+        "profit_factor": profit_factor,
+        "average_win": average_win,
+        "average_loss": average_loss,
+        "expectancy_per_trade": expectancy,
+        "average_trade_return_pct": average_trade_return_pct,
         "win_rate_pct": wins / len(trades) * 100 if trades else None,
         "fees_total": fees_total,
         "trades": trades,
