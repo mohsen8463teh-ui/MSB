@@ -215,24 +215,6 @@
       <div id="research-output" class="section" aria-live="polite"></div>
     </section>
 
-    <section class="card section" style="margin-top:18px" aria-live="polite">
-      <h3>پژوهش تاریخی بازار (Walk-forward)</h3>
-      <p class="sub">این بخش داده تاریخی را از منبع بازار می‌گیرد و هر نماد را جداگانه ارزیابی می‌کند؛ خروجی، سیگنال زنده نیست.</p>
-      <form id="research-form">
-        <div class="fields">
-          <div class="field"><label for="research-market">بازار</label><select id="research-market"><option value="iran_equity">بورس ایران</option><option value="crypto_spot">رمزارز اسپات</option></select></div>
-          <div class="field"><label for="research-horizon">افق داده</label><select id="research-horizon"><option value="1d">روزانه</option><option value="1w">هفتگی</option><option value="1m">ماهانه</option><option value="3m">۳ ماه</option><option value="6m">۶ ماه</option><option value="1y">۱ سال</option></select></div>
-        </div>
-        <div class="field"><label for="research-symbols">نمادها (حداکثر ۱۰، با ویرگول جدا کن)</label><input id="research-symbols" maxlength="320" required placeholder="مثلاً BTCUSDT, ETHUSDT"></div>
-        <div class="fields">
-          <div class="field"><label for="train-bars">کندل آموزش اولیه</label><input id="train-bars" type="number" min="200" max="9000" value="400" required></div>
-          <div class="field"><label for="test-bars">کندل آزمون</label><input id="test-bars" type="number" min="2" max="5000" value="90" required></div>
-        </div>
-        <button id="research-submit" type="submit">اجرای پژوهش تاریخی</button>
-        <div id="research-error" class="error" role="alert"></div>
-      </form>
-      <div id="research-output" class="section" hidden></div>
-    </section>
     <footer>M.S.B · داده ناقص = عدم صدور سیگنال · خروجی‌ها جایگزین بررسی مستقل نیستند.</footer>
   </main>
 
@@ -353,14 +335,21 @@
         if (!response.ok) throw new Error(body.detail || "درخواست پژوهش ناموفق بود.");
         output.appendChild(researchText("h4", body.status === "REPORT_CREATED" ? "گزارش آماده شد" : "داده قابل ارزیابی پیدا نشد"));
         output.appendChild(researchText("p", "دیتاست‌های پذیرفته‌شده: " + (body.accepted_dataset_count || 0) + " · بازار: " + (marketLabels[body.market] || body.market) + " · افق: " + (labels[body.horizon] || body.horizon)));
-        const reports = body.report && body.report.reports || {};
+        const reportMeta = body.report || {};
+        if (reportMeta.parameters) {
+          const p = reportMeta.parameters;
+          output.appendChild(researchText("p", "تنظیمات اجرا: آموزش " + p.initial_train_bars + " کندل · آزمون " + p.test_bars + " کندل · کارمزد " + p.fee_bps + " bps · لغزش " + p.slippage_bps + " bps · شبیه‌سازی " + p.simulations + " · Seed " + p.seed));
+        }
+        const reports = reportMeta.reports || {};
         Object.entries(reports).forEach(([id, item]) => {
           const section = document.createElement("div");
           section.className = "metric section";
           section.appendChild(researchText("strong", id));
           const walk = item.walk_forward || {};
+          section.appendChild(researchText("p", "وضعیت نمونه: " + (walk.sample_status || "نامشخص")));
           section.appendChild(researchText("p", "معاملات بسته‌شده: " + number(walk.closed_trades, 0) + " · تعداد گام‌ها: " + number((walk.folds || []).length, 0)));
           const mc = item.monte_carlo || {};
+          section.appendChild(researchText("p", "وضعیت کفایت مونت‌کارلو: " + (mc.status || "نامشخص") + " · حداقل معاملات: " + number(mc.minimum_trades, 0)));
           section.appendChild(researchText("p", "وضعیت مونت‌کارلو: " + (mc.status || "نامشخص") + " · " + (mc.note || "خروجی پژوهشی؛ نه پیش‌بینی سود.")));
           output.appendChild(section);
         });
