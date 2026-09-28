@@ -51,6 +51,8 @@ def validate_ohlcv(
     if now is None:
         current_time = datetime.now(timezone.utc).timestamp()
     else:
+        if isinstance(now, bool) or not isinstance(now, (int, float)):
+            raise ValueError("now must be a finite numeric timestamp")
         current_time = _finite_number(now)
         if current_time is None:
             raise ValueError("now must be a finite numeric timestamp")
