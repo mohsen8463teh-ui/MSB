@@ -7,6 +7,23 @@ from backend.app.data.base import MarketDataResult
 client = TestClient(main_module.app)
 
 
+def valid_candles(count=220):
+    rows = []
+    for index in range(count):
+        close = 100.0 + index
+        rows.append(
+            {
+                "timestamp": 1_000_000.0 + index * 3600,
+                "open": close - 0.2,
+                "high": close + 0.5,
+                "low": close - 0.5,
+                "close": close,
+                "volume": 10.0,
+            }
+        )
+    return rows
+
+
 class FakeCryptoProvider:
     name = "test_provider"
 
@@ -15,12 +32,12 @@ class FakeCryptoProvider:
             available=True,
             fresh=True,
             complete=True,
-            data={"candles": [{"close": 100.0}]},
+            data={"candles": valid_candles()},
             source=self.name,
         )
 
 
-def test_crypto_market_data_alone_never_creates_actionable_signal(monkeypatch):
+def test_crypto_market_data_and_indicators_never_create_actionable_signal(monkeypatch):
     monkeypatch.setattr(
         main_module,
         "crypto_spot_provider",
@@ -40,7 +57,9 @@ def test_crypto_market_data_alone_never_creates_actionable_signal(monkeypatch):
     body = response.json()
     assert body["decision"] == "NO_TRADE"
     assert body["data_quality"]["available"] is True
-    assert "No validated analysis strategy is enabled yet." in body["reasoning"]
+    assert body["indicators"]["candles_used"] == 220
+    assert body["evidence"]
+    assert "No validated trading strategy is enabled yet." in body["reasoning"]
 
 
 def test_crypto_provider_failure_is_reported_without_fake_signal(monkeypatch):

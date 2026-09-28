@@ -34,6 +34,8 @@ class AnalysisResponse(BaseModel):
     targets: list[Any] = Field(default_factory=list)
 
     risk_reward: Any | None = None
+    indicators: dict[str, Any] | None = None
+    evidence: list[str] = Field(default_factory=list)
     reasoning: list[str] = Field(default_factory=list)
     invalidation: list[str] = Field(default_factory=list)
 

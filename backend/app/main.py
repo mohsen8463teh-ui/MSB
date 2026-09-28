@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from .analysis.indicators import calculate_indicators
 from .core.intent import resolve_intent
 from .core.models import AnalyzeRequest, AnalysisResponse
 from .core.protocol import PROTOCOL_VERSION
@@ -52,21 +53,39 @@ async def analyze(request: AnalyzeRequest):
             "complete": market_data.complete,
         }
     )
-
     if market_data.issues:
         quality.issues.extend(
             issue for issue in market_data.issues if issue not in quality.issues
         )
 
-    reasoning = [
-        f"Data source: {market_data.source}.",
-        "No validated analysis strategy is enabled yet.",
-        "No fabricated signal is allowed.",
-    ]
-    if not quality.available:
-        reasoning.insert(1, "Market data did not pass all quality checks.")
+    indicators = None
+    evidence: list[str] = []
+    reasoning = [f"Data source: {market_data.source}."]
+
+    if quality.available:
+        try:
+            indicators = calculate_indicators(market_data.data.get("candles", []))
+            evidence = [
+                f"Price above SMA20: {indicators['price_above_sma20']}.",
+                f"Price above SMA50: {indicators['price_above_sma50']}.",
+                f"Price above SMA200: {indicators['price_above_sma200']}.",
+                f"Bullish SMA alignment: {indicators['trend_alignment_bullish']}.",
+                f"20-candle breakout: {indicators['breakout20']}.",
+            ]
+            reasoning.append("Market data passed integrity and freshness checks.")
+        except (KeyError, TypeError, ValueError) as error:
+            quality.available = False
+            quality.issues.append("analysis_input_invalid")
+            reasoning.append(f"Indicator calculation was skipped: {error}.")
     else:
-        reasoning.insert(1, "Market data passed the current integrity checks.")
+        reasoning.append("Market data did not pass all quality checks.")
+
+    reasoning.extend(
+        [
+            "No validated trading strategy is enabled yet.",
+            "No fabricated signal is allowed.",
+        ]
+    )
 
     return AnalysisResponse(
         protocol_version=PROTOCOL_VERSION,
@@ -74,6 +93,8 @@ async def analyze(request: AnalyzeRequest):
         market=request.market,
         symbol=request.symbol.upper() if request.symbol else None,
         horizon=horizon,
+        indicators=indicators,
+        evidence=evidence,
         reasoning=reasoning,
         invalidation=[
             "An actionable signal requires a validated strategy and verified data."
