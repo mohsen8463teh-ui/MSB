@@ -12,7 +12,7 @@ establish trading profitability or validate a strategy for live capital.
 - Persian/English horizon parsing with explicit supported horizons.
 - Fail-closed behavior when market data is missing or invalid.
 - Strict OHLCV integrity checks.
-- Read-only Binance public spot candle adapter for crypto spot.
+- Read-only Binance and OKX public spot candle adapters with automatic fallback.
 - Read-only TSETMC daily-history adapter with exact-symbol matching.
 - Today's potentially unfinished TSETMC candle is excluded.
 - SMA20/50/200, Wilder RSI14, Wilder ATR14, momentum, volume ratio,
@@ -21,11 +21,13 @@ establish trading profitability or validate a strategy for live capital.
 - Long-only backtest framework with bounded exposure, costs, no leverage,
   one position at a time, and no forced final liquidation.
 - Provider, indicator, and backtest behavior tested with deterministic fixtures.
+- Optional live smoke workflow; last GitHub-runner check reached OKX, while
+  Binance returned HTTP 451 and TSETMC timed out from that runner.
 - The API does not issue BUY/SELL signals merely because data or indicators exist.
 
-Live exchange/TSETMC connectivity, Iran market coverage, strategy validation,
-out-of-sample testing, journaling, and the user interface remain separate
-implementation and verification tasks.
+Live connectivity from the user's own network, Iran market coverage, strategy
+validation, out-of-sample testing, journaling, and the user interface remain
+separate implementation and verification tasks.
 
 ## Core principles
 

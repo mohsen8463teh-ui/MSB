@@ -17,12 +17,12 @@ class OkxSpotMarketDataProvider(MarketDataProvider):
     name = "okx_spot"
     BASE_URL = "https://www.okx.com"
     HORIZON_CONFIG = {
-        "intraday": ("15m", 200, 900),
-        "1d": ("1H", 200, 3600),
-        "3d": ("4H", 200, 14400),
+        "intraday": ("15m", 300, 900),
+        "1d": ("1H", 300, 3600),
+        "3d": ("4H", 300, 14400),
         "1w": ("4H", 300, 14400),
-        "1m": ("1D", 220, 86400),
-        "3m": ("1D", 220, 86400),
+        "1m": ("1D", 300, 86400),
+        "3m": ("1D", 300, 86400),
         "5m": ("1D", 300, 86400),
         "6m": ("1D", 300, 86400),
         "1y": ("1D", 300, 86400),
@@ -117,13 +117,16 @@ class OkxSpotMarketDataProvider(MarketDataProvider):
                 else float("inf")
             )
             fresh = bool(checked["candles"]) and 0 <= latest_age <= interval_seconds * 2
-            complete = checked["complete"]
+            enough_history = len(checked["candles"]) >= 200
+            complete = checked["complete"] and enough_history
             available = checked["valid"] and bool(checked["candles"])
             issues = list(checked["issues"])
             if not candles:
                 issues.append("no_closed_candles")
             if not fresh:
                 issues.append("market_data_not_fresh")
+            if not enough_history:
+                issues.append("insufficient_history_for_indicators")
             return MarketDataResult(
                 available=available,
                 fresh=fresh,
