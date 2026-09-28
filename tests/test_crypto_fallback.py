@@ -162,3 +162,33 @@ def test_crypto_fallback_fails_closed_when_both_sources_fail():
 
     assert result.available is False
     assert result.issues == ["primary_unavailable", "fallback_unavailable"]
+
+
+def test_okx_one_year_marks_history_incomplete_when_fewer_than_500_closed_bars():
+    now = 1_700_000_000.0
+    all_rows = [
+        okx_row((now - (index + 1) * 86400) * 1000)
+        for index in range(420)
+    ]
+
+    def handler(request):
+        assert request.url.path == "/api/v5/market/history-candles"
+        after = request.url.params.get("after")
+        rows = all_rows
+        if after is not None:
+            rows = [row for row in all_rows if int(row[0]) < int(after)]
+        return httpx.Response(200, json={"code": "0", "data": rows[:100]})
+
+    provider = OkxSpotMarketDataProvider(
+        transport=httpx.MockTransport(handler),
+        clock=lambda: now,
+    )
+    result = asyncio.run(
+        provider.get_market_data("crypto_spot", "BTCUSDT", "1y")
+    )
+
+    assert result.available is True
+    assert result.fresh is True
+    assert result.complete is False
+    assert len(result.data["candles"]) == 420
+    assert "insufficient_history_for_horizon" in result.issues
