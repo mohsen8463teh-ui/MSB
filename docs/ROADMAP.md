@@ -58,14 +58,10 @@
 
 ## Phase 4 — Signal Engine
 
-- [ ] Spot
-- [ ] Futures
-- [ ] Entry
-- [ ] Stop
-- [ ] Targets
-- [ ] R:R
-- [ ] Invalidation
-- [ ] Signal validity
+- [x] Research-only long-only SMA baseline
+- [ ] Validated spot/futures rules
+- [ ] Entry, stop, targets, and risk/reward
+- [ ] Invalidation and signal validity
 
 ## Phase 5 — Journal
 
@@ -79,7 +75,8 @@
 
 - [x] Long-only next-open execution framework (not a strategy)
 - [x] Fees, slippage, exposure cap, and open-position marking
-- [ ] Walk-forward strategy tests
+- [x] Baseline strategy signal/backtest integration (synthetic tests only)
+- [ ] Real-data walk-forward tests
 - [ ] Out-of-sample testing
 - [ ] Monte Carlo
 - [ ] Drawdown
