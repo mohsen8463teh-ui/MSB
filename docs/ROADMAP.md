@@ -84,7 +84,7 @@
 - [x] Expanding-window walk-forward framework (fixed baseline; synthetic tests only)
 - [ ] Real-data walk-forward tests across multiple assets
 - [ ] Out-of-sample validation with sufficient closed trades
-- [ ] Monte Carlo
+- [x] Trade-return bootstrap Monte Carlo (research-only; sample gate; synthetic tests)
 - [x] Maximum drawdown (marked-to-market equity curve)
 - [x] Profit factor
 - [ ] Average R (requires explicit per-trade risk definition)
