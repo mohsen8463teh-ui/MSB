@@ -61,6 +61,18 @@ def evaluate_research_universe(
         "research_only": True,
         "pooled_assets_or_timeframes": False,
         "dataset_count": len(reports),
+        "parameters": {
+            "initial_train_bars": initial_train_bars,
+            "test_bars": test_bars,
+            "step_bars": step_bars,
+            "initial_cash": initial_cash,
+            "fee_bps": fee_bps,
+            "slippage_bps": slippage_bps,
+            "max_exposure_fraction": max_exposure_fraction,
+            "simulations": simulations,
+            "seed": seed,
+            "minimum_trades_for_monte_carlo": minimum_trades,
+        },
         "reports": reports,
         "limitations": [
             "Each dataset is evaluated independently; results are not pooled",
