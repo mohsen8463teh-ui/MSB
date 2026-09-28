@@ -126,6 +126,18 @@ async def research_market(request: MarketResearchRequest):
                 "source": result.source, "issues": ["missing_candles"]
             }
             continue
+        minimum_bars = request.initial_train_bars + request.test_bars
+        if len(candles) < minimum_bars:
+            rejected[dataset_id] = {
+                "source": result.source,
+                "available": result.available,
+                "fresh": result.fresh,
+                "complete": result.complete,
+                "issues": ["insufficient_history_for_requested_walk_forward"],
+                "candle_count": len(candles),
+                "minimum_required": minimum_bars,
+            }
+            continue
         accepted[dataset_id] = candles
     if not accepted:
         return {
