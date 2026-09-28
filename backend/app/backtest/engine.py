@@ -7,6 +7,14 @@ from typing import Any
 from ..data.validation import validate_ohlcv
 
 
+def _is_finite_number(value: Any) -> bool:
+    return (
+        not isinstance(value, bool)
+        and isinstance(value, (int, float))
+        and math.isfinite(value)
+    )
+
+
 def run_long_only_backtest(
     candles: Sequence[Mapping[str, Any]],
     entry_signals: Sequence[bool],
@@ -32,14 +40,14 @@ def run_long_only_backtest(
         raise ValueError("entry_signals must contain booleans")
     if not all(isinstance(value, bool) for value in exit_signals):
         raise ValueError("exit_signals must contain booleans")
-    if not math.isfinite(initial_cash) or initial_cash <= 0:
+    if not _is_finite_number(initial_cash) or initial_cash <= 0:
         raise ValueError("initial_cash must be finite and positive")
-    if not math.isfinite(fee_bps) or not 0 <= fee_bps < 10_000:
+    if not _is_finite_number(fee_bps) or not 0 <= fee_bps < 10_000:
         raise ValueError("fee_bps must be in [0, 10000)")
-    if not math.isfinite(slippage_bps) or not 0 <= slippage_bps < 10_000:
+    if not _is_finite_number(slippage_bps) or not 0 <= slippage_bps < 10_000:
         raise ValueError("slippage_bps must be in [0, 10000)")
     if (
-        not math.isfinite(max_exposure_fraction)
+        not _is_finite_number(max_exposure_fraction)
         or not 0 < max_exposure_fraction <= 1
     ):
         raise ValueError("max_exposure_fraction must be in (0, 1]")
