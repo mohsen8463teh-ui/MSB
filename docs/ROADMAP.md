@@ -84,9 +84,9 @@
 - [ ] Real-data walk-forward tests across multiple assets
 - [ ] Out-of-sample validation with sufficient closed trades
 - [ ] Monte Carlo
-- [ ] Drawdown
-- [ ] Profit factor
-- [ ] Average R
+- [x] Maximum drawdown (marked-to-market equity curve)
+- [x] Profit factor
+- [ ] Average R (requires explicit per-trade risk definition)
 - [ ] Performance by market regime
 
 ## Phase 7 — User Interface
