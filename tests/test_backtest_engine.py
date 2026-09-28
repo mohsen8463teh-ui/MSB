@@ -39,6 +39,11 @@ def test_signals_execute_at_next_open_not_same_close():
     assert trade["net_pnl"] == pytest.approx(1000 / 110 * 10)
     assert result["realized_pnl"] == pytest.approx(trade["net_pnl"])
     assert result["realized_return_pct"] == pytest.approx(trade["net_pnl"] / 1000 * 100)
+    assert result["wins"] == 1
+    assert result["losses"] == 0
+    assert result["profit_factor"] is None
+    assert result["expectancy_per_trade"] == pytest.approx(trade["net_pnl"])
+    assert result["average_trade_return_pct"] == pytest.approx(trade["return_pct"])
 
 
 def test_final_bar_signal_is_not_filled_without_next_open():
