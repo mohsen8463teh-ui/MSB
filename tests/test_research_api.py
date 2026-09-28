@@ -49,3 +49,28 @@ def test_research_api_rejects_duplicate_dataset_ids():
         "test_bars": 80,
     })
     assert response.status_code == 422
+
+
+
+def test_market_research_isolates_provider_errors_per_symbol(monkeypatch):
+    class BrokenProvider:
+        async def get_market_data(self, **kwargs):
+            raise TimeoutError("private upstream details")
+
+    import backend.app.main as main_module
+    monkeypatch.setattr(main_module, "crypto_spot_provider", BrokenProvider())
+    response = client.post("/v1/research/market", json={
+        "market": "crypto_spot",
+        "symbols": ["BTC"],
+        "horizon": "1d",
+        "initial_train_bars": 300,
+        "test_bars": 80,
+        "simulations": 100,
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "NO_QUALITY_PASSING_DATASETS"
+    rejection = body["rejected"]["BTC:1d"]
+    assert rejection["issues"] == ["provider_error"]
+    assert rejection["error_type"] == "TimeoutError"
+    assert "private upstream details" not in response.text
