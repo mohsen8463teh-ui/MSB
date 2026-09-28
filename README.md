@@ -2,113 +2,30 @@
 
 ## Market Strategy Brain
 
-M.S.B is an AI-assisted market analysis platform for:
+M.S.B is an AI-assisted market analysis platform for Iran equities and crypto.
+It is being built in independently testable stages. Passing unit tests does not
+establish trading profitability or validate a strategy for live capital.
 
-- Iran Stock Market
-- Crypto Spot
-- Crypto Futures
+## Current verified implementation
 
-Supported analysis horizons:
+- FastAPI health and analysis endpoints.
+- Persian/English horizon parsing with explicit supported horizons.
+- Fail-closed behavior when market data is missing or invalid.
+- Strict OHLCV integrity checks.
+- Read-only Binance public spot candle adapter for crypto spot.
+- Adapter behavior tested with deterministic mocked HTTP responses.
+- The API does not issue BUY/SELL signals merely because market data is available.
 
-- Intraday
-- 1 day
-- 3 days
-- 1 week
-- 1 month
-- 3 months
-- 5 months
-- 6 months
-- 1 year
+Live exchange connectivity, Iran market data, analysis strategy validation,
+backtesting, journaling, and the user interface remain separate implementation
+and verification tasks.
 
-## Core principle
+## Core principles
 
-M.S.B must behave as an analytical market assistant, not as a simple indicator scanner.
-
-The system must:
-
-1. Understand natural-language requests.
-2. Resolve market, asset type and time horizon.
-3. Gather current market data.
-4. Evaluate market regime and structure.
-5. Analyze multiple independent evidence groups.
-6. Validate data quality.
-7. Produce BUY / SELL / WAIT / NO_TRADE decisions when appropriate.
-8. Never fabricate missing data.
-9. Never claim guaranteed profit.
-10. Never use future information in historical evaluation.
-11. Journal every actionable signal.
-
-## Markets
-
-### Iran equities
-
-- Price
-- Volume
-- Liquidity
-- Market structure
-- Trend
-- Relative strength
-- Buyer/seller pressure
-- Sector
-- Market regime
-- Fundamental information
-- Codal information
-- TSETMC information
-- Relevant news/events
-
-### Crypto
-
-- Price
-- Volume
-- Market structure
-- Trend
-- Volatility
-- Liquidity
-- Open Interest
-- Funding
-- Liquidations
-- Basis
-- Long/short positioning
-- Spot flow/CVD when reliable
-- BTC dominance
-- On-chain information when reliable
-- News/events
-- Macro context
-
-## Futures output
-
-A valid futures signal may contain:
-
-- Direction
-- Entry zone
-- Stop / invalidation
-- TP1
-- TP2
-- TP3
-- Risk/reward
-- Suggested risk limits
-- Signal validity
-- Reasoning
-- Invalidation conditions
-
-## Spot output
-
-A valid spot analysis may contain:
-
-- BUY
-- WAIT
-- SELL
-
-plus:
-
-- Entry zone
-- Targets
-- Invalidation
-- Horizon
-- Reasoning
-
-## Important
-
-WAIT / NO_TRADE is a valid result.
-
-If data quality is insufficient, M.S.B must not invent a signal.
+1. Understand natural-language requests without guessing unsupported horizons.
+2. Verify data source, freshness, completeness, and candle integrity.
+3. Never fabricate missing data or claim guaranteed profit.
+4. Never use future information in historical evaluation.
+5. Keep data acquisition, analysis, decision validation, and journaling separate.
+6. Treat WAIT / NO_TRADE as valid outcomes.
+7. Do not enable actionable signals before out-of-sample validation.
