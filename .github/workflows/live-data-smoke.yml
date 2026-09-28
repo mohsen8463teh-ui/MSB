@@ -9,6 +9,8 @@ on:
       - "backend/app/data/binance_spot.py"
       - "backend/app/data/crypto_spot.py"
       - "backend/app/data/tsetmc_equity.py"
+      - "backend/app/analysis/strategy_baseline.py"
+      - "backend/app/backtest/**"
       - ".github/workflows/live-data-smoke.yml"
   workflow_dispatch:
 
