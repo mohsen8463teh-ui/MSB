@@ -1,7 +1,12 @@
 import pytest
+from fastapi.testclient import TestClient
 
 from backend.app.core.intent import resolve_intent
 from backend.app.core.validator import validate_data_quality
+from backend.app.main import app
+
+
+client = TestClient(app)
 
 
 @pytest.mark.parametrize(
@@ -51,3 +56,16 @@ def test_missing_data_fails_closed():
     assert result.fresh is False
     assert result.complete is False
     assert "live_market_data_not_connected" in result.issues
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("market", "unknown_market"), ("horizon", "2w")],
+)
+def test_api_rejects_unsupported_market_and_horizon(field, value):
+    response = client.post(
+        "/v1/analyze",
+        json={"query": "تحلیل", field: value},
+    )
+
+    assert response.status_code == 422

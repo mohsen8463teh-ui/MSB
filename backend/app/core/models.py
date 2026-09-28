@@ -4,13 +4,15 @@ from pydantic import BaseModel, Field
 
 
 Decision = Literal["BUY", "SELL", "WAIT", "NO_TRADE"]
+Market = Literal["iran_equity", "crypto_spot", "crypto_futures"]
+Horizon = Literal["intraday", "1d", "3d", "1w", "1m", "3m", "5m", "6m", "1y"]
 
 
 class AnalyzeRequest(BaseModel):
     query: str = Field(min_length=1)
     symbol: str | None = None
-    market: str | None = None
-    horizon: str | None = None
+    market: Market | None = None
+    horizon: Horizon | None = None
 
 
 class DataQuality(BaseModel):
