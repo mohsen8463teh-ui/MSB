@@ -21,8 +21,8 @@ establish trading profitability or validate a strategy for live capital.
 - Long-only backtest framework with bounded exposure, costs, no leverage,
   one position at a time, and no forced final liquidation.
 - Provider, indicator, and backtest behavior tested with deterministic fixtures.
-- Optional live smoke workflow; last GitHub-runner check reached OKX, while
-  Binance returned HTTP 451 and TSETMC timed out from that runner.
+- Live GitHub-runner probe: OKX returned 299 fresh, complete closed candles;
+  Binance returned HTTP 451; TSETMC timed out from that runner.
 - The API does not issue BUY/SELL signals merely because data or indicators exist.
 
 Live connectivity from the user's own network, Iran market coverage, strategy

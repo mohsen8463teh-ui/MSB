@@ -23,7 +23,7 @@
 ### Crypto
 
 - [x] Binance public spot OHLCV adapter (mock-tested; runner returned HTTP 451)
-- [x] OKX public spot OHLCV adapter (mock-tested; live smoke passed from GitHub runner)
+- [x] OKX public spot OHLCV adapter (mock-tested; live runner returned 299 fresh, complete candles)
 - [x] Automatic Binance-to-OKX fallback
 - [ ] Additional exchange/fallback sources
 - [ ] Futures
