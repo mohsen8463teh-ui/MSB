@@ -180,7 +180,7 @@ def test_tsetmc_provider_rejects_invalid_timeout_configuration(bad_timeout):
 
 @pytest.mark.parametrize("bad_base_url", ["", "ftp://example.com/api", None, 123])
 def test_tsetmc_provider_rejects_invalid_base_url(bad_base_url):
-    with pytest.raises(ValueError, match="HTTP(S) URL"):
+    with pytest.raises(ValueError, match="HTTP.*URL"):
         TsetmcEquityMarketDataProvider(base_url=bad_base_url)
 
 
