@@ -25,7 +25,7 @@ class OkxSpotMarketDataProvider(MarketDataProvider):
         "3m": ("1D", 300, 86400, 200),
         "5m": ("1D", 300, 86400, 200),
         "6m": ("1D", 300, 86400, 200),
-        "1y": ("1D", 100, 86400, 365),
+        "1y": ("1D", 100, 86400, 500),
     }
 
     def __init__(
