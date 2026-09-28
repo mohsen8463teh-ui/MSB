@@ -120,3 +120,34 @@ def test_crypto_provider_exception_returns_safe_no_trade_response(monkeypatch):
     assert body["data_quality"]["issues"] == ["provider_error"]
     assert body["indicators"] is None
     assert "upstream secret details" not in response.text
+
+
+def test_invalid_indicator_input_does_not_expose_exception_details(monkeypatch):
+    class InvalidDataProvider:
+        name = "invalid_provider"
+
+        async def get_market_data(self, market, symbol, horizon):
+            return MarketDataResult(
+                available=True,
+                fresh=True,
+                complete=True,
+                data={"candles": []},
+                source=self.name,
+            )
+
+    monkeypatch.setattr(main_module, "crypto_spot_provider", InvalidDataProvider())
+    response = client.post(
+        "/v1/analyze",
+        json={
+            "query": "analyze BTC for one day",
+            "market": "crypto_spot",
+            "symbol": "BTCUSDT",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["decision"] == "NO_TRADE"
+    assert body["data_quality"]["available"] is False
+    assert "analysis_input_invalid" in body["data_quality"]["issues"]
+    assert "provider data was invalid" in " ".join(body["reasoning"])
