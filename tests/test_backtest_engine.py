@@ -152,3 +152,15 @@ def test_rejects_boolean_and_nonnumeric_risk_parameters(kwargs):
             [False, False],
             **kwargs,
         )
+
+
+def test_backtest_rejects_future_dated_candles_before_simulation():
+    rows = candles([100, 101], [100, 101])
+    rows[-1]["timestamp"] = 4_102_444_800.0  # 2100-01-01 UTC
+
+    with pytest.raises(ValueError, match="invalid or incomplete candles"):
+        run_long_only_backtest(
+            rows,
+            [False, False],
+            [False, False],
+        )
