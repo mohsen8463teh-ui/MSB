@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from ..analysis.strategy_baseline import generate_sma_trend_signals
+from .engine import run_long_only_backtest
 from .holdout import evaluate_baseline_walk_forward
 from .monte_carlo import bootstrap_trade_returns
 
@@ -38,18 +40,35 @@ def evaluate_research_universe(
             slippage_bps=slippage_bps,
             max_exposure_fraction=max_exposure_fraction,
         )
-        trades = [
-            trade
-            for fold in walk["folds"]
-            for trade in fold["results"]["trades"]
-        ]
-        monte_carlo = bootstrap_trade_returns(
-            trades,
-            simulations=simulations,
-            seed=seed,
-            initial_equity=initial_cash,
-            minimum_trades=minimum_trades,
-        )
+        resolved_step = test_bars if step_bars is None else step_bars
+        continuous_oos = None
+        monte_carlo = {
+            "status": "SKIPPED_NON_CONTIGUOUS_TEST_WINDOWS",
+            "note": "Monte Carlo requires a continuous out-of-sample equity path; test windows contain gaps.",
+        }
+        if resolved_step == test_bars:
+            signals = generate_sma_trend_signals(candles)
+            oos_candles = candles[initial_train_bars:]
+            entries = signals["entry_signals"][initial_train_bars:]
+            exits = signals["exit_signals"][initial_train_bars:]
+            if signals["bullish_condition"][initial_train_bars]:
+                entries[0] = True
+            continuous_oos = run_long_only_backtest(
+                oos_candles,
+                entries,
+                exits,
+                initial_cash=initial_cash,
+                fee_bps=fee_bps,
+                slippage_bps=slippage_bps,
+                max_exposure_fraction=max_exposure_fraction,
+            )
+            monte_carlo = bootstrap_trade_returns(
+                continuous_oos["trades"],
+                simulations=simulations,
+                seed=seed,
+                initial_equity=initial_cash,
+                minimum_trades=minimum_trades,
+            )
         reports[dataset_id] = {
             "dataset_id": dataset_id,
             "walk_forward": walk,
@@ -57,7 +76,7 @@ def evaluate_research_universe(
             "trade_count_consistent": len(trades) == walk["closed_trades"],
         }
     return {
-        "method": "per_dataset_walk_forward_plus_trade_pnl_bootstrap",
+        "method": "per_dataset_walk_forward_with_continuous_oos_when_windows_are_adjacent",
         "research_only": True,
         "pooled_assets_or_timeframes": False,
         "dataset_count": len(reports),
@@ -76,7 +95,7 @@ def evaluate_research_universe(
         "reports": reports,
         "limitations": [
             "Each dataset is evaluated independently; results are not pooled",
-            "Monte Carlo resamples only closed trades from walk-forward test folds",
+            "Continuous out-of-sample portfolio starts flat at the first test bar and remains invested across adjacent test-window boundaries",\n            "Monte Carlo resamples closed trades from the continuous out-of-sample portfolio only; skipped when test windows have gaps",
             "Bootstrap assumes exchangeability and does not preserve trade order or dependence",
             "No report is evidence of future profitability",
         ],
