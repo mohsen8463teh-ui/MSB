@@ -42,14 +42,8 @@ async def probe_providers():
             "BTCUSDT",
             "1y",
         ),
-        (
-            "tsetmc_equity",
-            TsetmcEquityMarketDataProvider(),
-            "iran_equity",
-            "فملی",
-            "1d",
-        ),
     )
+    tsetmc_symbols = ("فملی", "فولاد", "شستا", "وبملت", "خودرو")
     report = []
     for name, provider, market, symbol, horizon in checks:
         result = await provider.get_market_data(market, symbol, horizon)
@@ -96,6 +90,21 @@ async def probe_providers():
                     "error_type": type(error).__name__,
                 }
         report.append(item)
+    # Probe several Iranian equities independently; one ticker is not
+    # sufficient evidence that the live TSETMC path is healthy.
+    tse_provider = TsetmcEquityMarketDataProvider()
+    for symbol in tsetmc_symbols:
+        result = await tse_provider.get_market_data("iran_equity", symbol, "1d")
+        report.append({
+            "provider": "tsetmc_equity",
+            "symbol": symbol,
+            "available": result.available,
+            "fresh": result.fresh,
+            "complete": result.complete,
+            "candle_count": len(result.data.get("candles", [])),
+            "as_of": result.data.get("as_of"),
+            "issues": result.issues,
+        })
     return report
 
 
