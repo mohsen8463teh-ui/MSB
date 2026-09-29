@@ -97,10 +97,13 @@ class OkxSpotMarketDataProvider(MarketDataProvider):
             if len(rows_by_timestamp) >= target_count:
                 break
 
-        return sorted(
+        ordered = sorted(
             rows_by_timestamp.values(),
             key=lambda row: int(row[0]),
         )
+        # Keep the newest requested window after pagination; pages can
+        # overshoot the target by up to one page.
+        return ordered[-target_count:]
 
     async def get_market_data(
         self,
