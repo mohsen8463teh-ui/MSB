@@ -151,6 +151,49 @@ def probe_api():
         }
 
 
+async def probe_tsetmc_mirrors():
+    # Test alternate TSETMC CDN hosts from the same runner that executes MSB.
+    # This isolates host reachability before changing the production provider.
+    import httpx
+    from urllib.parse import quote
+
+    report = []
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36",
+        "Accept": "application/json,text/plain,*/*",
+        "Referer": "https://www.tsetmc.com/",
+        "Origin": "https://www.tsetmc.com",
+    }
+    for host in ("https://cdn.tsetmc.com/api", "https://cdn10.tsetmc.com/api"):
+        item = {"host": host, "search_ok": False, "history_ok": False, "candle_count": 0}
+        try:
+            async with httpx.AsyncClient(timeout=15.0, headers=headers) as client:
+                response = await client.get(
+                    host + "/Instrument/GetInstrumentSearch/" + quote("فملی", safe="")
+                )
+                item["search_status"] = response.status_code
+                response.raise_for_status()
+                payload = response.json()
+                matches = payload.get("instrumentSearch", []) if isinstance(payload, dict) else []
+                exact = [row for row in matches if isinstance(row, dict) and str(row.get("lVal18AFC", "")).replace("ي", "ی").replace("ك", "ک") == "فملی"]
+                item["search_ok"] = len(exact) == 1
+                if item["search_ok"]:
+                    ins_code = str(exact[0].get("insCode", ""))
+                    history = await client.get(
+                        host + f"/ClosingPrice/GetClosingPriceDailyList/{ins_code}/500"
+                    )
+                    item["history_status"] = history.status_code
+                    history.raise_for_status()
+                    history_payload = history.json()
+                    rows = history_payload.get("closingPriceDaily", []) if isinstance(history_payload, dict) else []
+                    item["history_ok"] = isinstance(rows, list) and len(rows) > 0
+                    item["candle_count"] = len(rows) if isinstance(rows, list) else 0
+        except Exception as error:
+            item["error_type"] = type(error).__name__
+        report.append(item)
+    return report
+
+
 async def main():
     report = await probe_providers()
     report.append({"api_pipeline_1y": probe_api()})
