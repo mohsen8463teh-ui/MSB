@@ -1,6 +1,12 @@
 name: Live Data Smoke Check
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "scripts/live_data_smoke.py"
+      - ".github/workflows/live-data-smoke.yml"
   push:
     branches:
       - main
@@ -20,7 +26,7 @@ permissions:
 jobs:
   live-data-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4

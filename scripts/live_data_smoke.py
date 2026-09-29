@@ -197,6 +197,7 @@ async def probe_tsetmc_mirrors():
 async def main():
     report = await probe_providers()
     report.append({"api_pipeline_1y": probe_api()})
+    report.append({"tsetmc_mirror_probe": await probe_tsetmc_mirrors()})
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
