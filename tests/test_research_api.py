@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import pytest
 
 from backend.app.main import app
 
@@ -56,6 +57,25 @@ def test_research_api_rejects_duplicate_dataset_ids():
     })
     assert response.status_code == 422
 
+
+@pytest.mark.parametrize("mutation", ["missing_timestamp", "boolean_timestamp", "out_of_order"])
+def test_research_report_rejects_malformed_candles_with_422(mutation):
+    candles = rising_candles()
+    if mutation == "missing_timestamp":
+        del candles[-1]["timestamp"]
+    elif mutation == "boolean_timestamp":
+        candles[-1]["timestamp"] = True
+    else:
+        candles[-1]["timestamp"] = candles[-2]["timestamp"] - 1
+
+    response = client.post("/v1/research/report", json={
+        "datasets": [{"dataset_id": "BTC:1d", "candles": candles}],
+        "initial_train_bars": 300,
+        "test_bars": 80,
+        "simulations": 100,
+    })
+    assert response.status_code == 422
+    assert "invalid or incomplete candles" in response.json()["detail"]
 
 
 def test_market_research_isolates_provider_errors_per_symbol(monkeypatch):
