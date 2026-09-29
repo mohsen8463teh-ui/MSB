@@ -27,3 +27,8 @@ def test_invalid_configuration_rejected(kwargs):
 def test_invalid_trade_pnl_rejected(value):
     with pytest.raises(ValueError):
         bootstrap_trade_returns([{"net_pnl": value}] * 30, simulations=100)
+
+@pytest.mark.parametrize("initial_equity", [True, "100000", None, float("nan"), float("inf")])
+def test_invalid_initial_equity_type_or_value_rejected(initial_equity):
+    with pytest.raises(ValueError, match="initial_equity"):
+        bootstrap_trade_returns(sample(30), initial_equity=initial_equity)
