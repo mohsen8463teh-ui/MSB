@@ -69,3 +69,16 @@ def test_api_rejects_unsupported_market_and_horizon(field, value):
     )
 
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize("bad_value", ["true", 1, None, [], {}])
+def test_data_quality_rejects_non_boolean_quality_flags(bad_value):
+    result = validate_data_quality({
+        "available": bad_value,
+        "fresh": True,
+        "complete": True,
+    })
+    assert result.available is False
+    assert result.fresh is True
+    assert result.complete is True
+    assert "market_data_invalid_available_flag" in result.issues
