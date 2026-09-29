@@ -30,8 +30,7 @@ def evaluate_baseline_holdout(
     if split_index < 200 or split_index >= len(candles) - 1:
         raise ValueError("split_index must leave at least 200 warmup and 2 test bars")
 
-    last_timestamp = float(candles[-1]["timestamp"])
-    checked = validate_ohlcv(candles, now=last_timestamp + 1)
+    checked = validate_ohlcv(candles)
     if not checked["valid"] or not checked["complete"]:
         raise ValueError("invalid or incomplete candles: " + ", ".join(checked["issues"]))
     series = checked["candles"]
