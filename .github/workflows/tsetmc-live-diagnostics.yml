@@ -1,0 +1,72 @@
+name: TSETMC Live Diagnostics
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: Persian symbol to test
+        required: false
+        default: "فملی"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Probe official and legacy TSETMC endpoints
+        env:
+          SYMBOL: ${{ inputs.symbol }}
+        run: |
+          python - <<'PY'
+          import os, requests
+          from urllib.parse import quote
+          H = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36", "Accept":"application/json"}
+          S = requests.Session(); S.headers.update(H)
+          def get(label,url):
+              try:
+                  r=S.get(url,timeout=18)
+                  print(f"{label}: HTTP {r.status_code}, bytes={len(r.content)}, type={r.headers.get('content-type','')}")
+                  r.raise_for_status()
+                  try: return r.json()
+                  except Exception: print(label+": non-JSON"); return None
+              except Exception as e: print(f"{label}: ERROR {type(e).__name__}: {e}"); return None
+          symbol=os.getenv("SYMBOL","فملی").strip()
+          mw=get("WEBGW_MARKET_WATCH","https://webgw.tse.ir/InstrumentProvider/api/v1/MarketWatch/MarketWatchCash/fa")
+          items=mw.get("Items",[]) if isinstance(mw,dict) else []
+          print("WEBGW_ITEMS:",len(items))
+          chosen=None
+          for x in items:
+              if isinstance(x,dict) and symbol in [str(x.get(k,"")).strip() for k in ("instrument_Name","instrumentName","instrumentname","lVal18AFC","symbol")]:
+                  chosen=x; break
+          if chosen is None and items:
+              chosen=items[0]; print("WEBGW_SYMBOL_MATCH: not found; probing first item")
+          if chosen:
+              isin=chosen.get("instrumentId") or chosen.get("instrumentid") or chosen.get("InstrumentId")
+              print("WEBGW_ITEM_KEYS:",sorted(chosen.keys())[:60])
+              print("WEBGW_RESOLVED_ID_PRESENT:",bool(isin))
+              if isin:
+                  base="https://webgw.tse.ir/InstrumentProvider/api/v1"
+                  live=get("WEBGW_LIVE",base+"/Instrument/LiveInstrumentByIdQuery/fa?InstrumentId="+quote(str(isin),safe=""))
+                  hist=get("WEBGW_ARCHIVE",base+"/History/Archive/fa?InstrumentId="+quote(str(isin),safe=""))
+                  if isinstance(live,dict): print("WEBGW_LIVE_KEYS:",sorted(live.keys())[:80])
+                  rows=hist if isinstance(hist,list) else (hist.get("Items",[]) if isinstance(hist,dict) else [])
+                  print("WEBGW_HISTORY_ROWS:",len(rows) if isinstance(rows,list) else "unexpected-shape")
+                  if isinstance(rows,list) and rows and isinstance(rows[0],dict): print("WEBGW_HISTORY_ROW_KEYS:",sorted(rows[0].keys())[:80])
+          cdn="https://cdn.tsetmc.com/api"
+          search=get("CDN_SYMBOL_SEARCH",cdn+"/Instrument/GetInstrumentSearch/"+quote(symbol,safe=""))
+          matches=search.get("instrumentSearch",[]) if isinstance(search,dict) else []
+          print("CDN_SYMBOL_MATCHES:",len(matches))
+          exact=[x for x in matches if isinstance(x,dict) and str(x.get("lVal18AFC","")).replace("ي","ی").replace("ك","ک").strip()==symbol.replace("ي","ی").replace("ك","ک")]
+          if exact:
+              hist=get("CDN_HISTORY",cdn+"/ClosingPrice/GetClosingPriceDailyList/"+str(exact[0].get("insCode"))+"/500")
+              rows=hist.get("closingPriceDaily",[]) if isinstance(hist,dict) else []
+              print("CDN_HISTORY_ROWS:",len(rows))
+              if rows and isinstance(rows[0],dict): print("CDN_HISTORY_ROW_KEYS:",sorted(rows[0].keys()))
+          PY
