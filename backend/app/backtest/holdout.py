@@ -96,6 +96,11 @@ def evaluate_baseline_walk_forward(
     if len(candles) < initial_train_bars + test_bars:
         raise ValueError("not enough candles for one complete walk-forward fold")
 
+    checked = validate_ohlcv(candles)
+    if not checked["valid"] or not checked["complete"]:
+        raise ValueError("invalid or incomplete candles: " + ", ".join(checked["issues"]))
+    candles = checked["candles"]
+
     folds: list[dict[str, Any]] = []
     start = initial_train_bars
     while start + 1 < len(candles):
