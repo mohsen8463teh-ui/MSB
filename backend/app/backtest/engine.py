@@ -52,8 +52,7 @@ def run_long_only_backtest(
     ):
         raise ValueError("max_exposure_fraction must be in (0, 1]")
 
-    last_timestamp = float(candles[-1]["timestamp"])
-    checked = validate_ohlcv(candles, now=last_timestamp + 1)
+    checked = validate_ohlcv(candles)
     if not checked["valid"] or not checked["complete"]:
         raise ValueError("invalid or incomplete candles: " + ", ".join(checked["issues"]))
     series = checked["candles"]
