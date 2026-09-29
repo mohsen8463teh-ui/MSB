@@ -37,6 +37,10 @@ def calculate_long_position_size(
     by_cash = cash_cap / entry
     quantity = min(by_risk, by_cash)
     notional = quantity * entry
+    estimated_loss = quantity * per_unit
+    derived = (risk_budget, per_unit, by_risk, cash_cap, by_cash, quantity, notional, estimated_loss)
+    if any(not math.isfinite(value) for value in derived):
+        raise ValueError("calculation_overflow")
     return PositionSize(
         risk_budget=risk_budget,
         risk_per_unit=per_unit,
@@ -44,5 +48,5 @@ def calculate_long_position_size(
         quantity_by_cash=by_cash,
         quantity=quantity,
         notional=notional,
-        estimated_loss_at_stop=quantity * per_unit,
+        estimated_loss_at_stop=estimated_loss,
     )
