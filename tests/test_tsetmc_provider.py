@@ -78,6 +78,33 @@ def test_tsetmc_provider_resolves_exact_symbol_and_excludes_today():
     assert result.data["candles"][-1]["close"] == 100.0
 
 
+
+def test_tsetmc_provider_rejects_future_dated_history():
+    def handler(request):
+        if "Instrument/GetInstrumentSearch" in request.url.path:
+            return httpx.Response(200, json={"instrumentSearch": [
+                {"insCode": "12345678901234567", "lVal18AFC": "فملی"}
+            ]})
+        rows = history_rows()
+        rows.append({
+            "dEven": 20250104,
+            "priceFirst": 1000,
+            "priceMax": 1010,
+            "priceMin": 990,
+            "pClosing": 1005,
+            "qTotTran5J": 500,
+        })
+        return httpx.Response(200, json={"closingPriceDaily": rows})
+
+    provider = TsetmcEquityMarketDataProvider(
+        transport=httpx.MockTransport(handler),
+        clock=lambda: NOW,
+    )
+    result = asyncio.run(provider.get_market_data("iran_equity", "فملی", "1d"))
+    assert result.available is False
+    assert result.issues == ["future_daily_history_date"]
+
+
 def test_tsetmc_provider_rejects_non_exact_symbol_match():
     def handler(request):
         return httpx.Response(
