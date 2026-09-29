@@ -63,7 +63,7 @@
 
 - [x] Research-only long-only SMA baseline
 - [ ] Validated spot/futures rules
-- [x] Informational long-only position sizing capped by risk budget, cash, and exposure (calculator only; not a signal/order)\n- [ ] Entry, stop, targets, and risk/reward
+- [x] Informational long-only position sizing capped by risk budget, cash, and exposure (calculator only; not a signal/order)\n- [x] Position-sizing API and Persian dashboard calculator\n- [ ] Entry, stop, targets, and risk/reward
 - [ ] Invalidation and signal validity
 
 ## Phase 5 — Journal
