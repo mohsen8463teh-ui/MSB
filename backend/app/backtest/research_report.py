@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from ..analysis.strategy_baseline import generate_sma_trend_signals
+from ..data.validation import validate_ohlcv
 from .engine import run_long_only_backtest
 from .holdout import evaluate_baseline_walk_forward
 from .monte_carlo import bootstrap_trade_returns
@@ -63,6 +64,15 @@ def evaluate_research_universe(
     for dataset_id, candles in datasets.items():
         if not isinstance(dataset_id, str) or not dataset_id.strip():
             raise ValueError("dataset identifiers must be non-empty strings")
+        if not isinstance(candles, Sequence) or isinstance(candles, (str, bytes)):
+            raise ValueError(f"dataset {dataset_id!r} candles must be a sequence")
+        checked = validate_ohlcv(candles)
+        if not checked["valid"] or not checked["complete"]:
+            raise ValueError(
+                f"dataset {dataset_id!r} contains invalid or incomplete candles: "
+                + ", ".join(checked["issues"])
+            )
+        candles = checked["candles"]
         walk = evaluate_baseline_walk_forward(
             candles,
             initial_train_bars=initial_train_bars,

@@ -114,3 +114,18 @@ def test_research_report_exposes_trade_count_comparison_as_diagnostic():
 def test_research_report_rejects_invalid_dataset_identifier_before_processing():
     with pytest.raises(ValueError, match="dataset identifiers"):
         evaluate_research_universe({" ": rising_candles()})
+
+
+@pytest.mark.parametrize("mutation", ["nan", "duplicate_timestamp", "bad_ohlc"])
+def test_research_report_rejects_invalid_candles_before_backtest(mutation):
+    candles = rising_candles()
+    if mutation == "nan":
+        candles[-1]["close"] = float("nan")
+    elif mutation == "duplicate_timestamp":
+        candles[-1]["timestamp"] = candles[-2]["timestamp"]
+    else:
+        candles[-1]["high"] = candles[-1]["low"] - 1
+    with pytest.raises(ValueError, match="invalid or incomplete candles"):
+        evaluate_research_universe(
+            {"BTC:1d": candles}, initial_train_bars=300, test_bars=80, simulations=100
+        )
