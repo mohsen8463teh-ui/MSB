@@ -1,13 +1,16 @@
 from pathlib import Path
+import os
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .analysis.indicators import calculate_indicators
 from .backtest.research_report import evaluate_research_universe
 from .core.intent import resolve_intent
+from .core.journal import create_journal_record
+from .core.journal_store import JournalStore
 from .core.models import AnalyzeRequest, AnalysisResponse
 from .core.protocol import PROTOCOL_VERSION
 from .core.validator import validate_data_quality
@@ -16,6 +19,20 @@ from .data.crypto_spot import FallbackCryptoSpotMarketDataProvider
 from .data.placeholder import PlaceholderMarketDataProvider
 from .data.tsetmc_equity import TsetmcEquityMarketDataProvider
 from .data.validation import validate_ohlcv
+
+
+class JournalCreateRequest(BaseModel):
+    market: str
+    symbol: str
+    horizon: str
+    direction: str = "FLAT"
+    source_type: str
+    evidence: list[str] = Field(default_factory=list, max_length=100)
+    data_as_of: str | None = None
+    entry: float | None = None
+    stop: float | None = None
+    targets: list[float] = Field(default_factory=list, max_length=20)
+    notes: str = Field(default="", max_length=4000)
 
 
 class ResearchDataset(BaseModel):
@@ -41,16 +58,12 @@ class ResearchReportRequest(BaseModel):
     seed: int = Field(default=7, ge=0, le=2147483647)
 
 
-app = FastAPI(
-    title="M.S.B",
-    version=PROTOCOL_VERSION,
-    description="Market Strategy Brain",
-)
-
+app = FastAPI(title="M.S.B", version=PROTOCOL_VERSION, description="Market Strategy Brain")
 placeholder_provider = PlaceholderMarketDataProvider()
 crypto_spot_provider = FallbackCryptoSpotMarketDataProvider()
 iran_equity_provider = TsetmcEquityMarketDataProvider()
 FRONTEND_FILE = Path(__file__).resolve().parents[2] / "frontend" / "index.html"
+journal_store = JournalStore(os.getenv("MSB_JOURNAL_DB", str(Path.home() / ".msb" / "journal.sqlite3")))
 
 
 def get_data_provider(market: str | None):
@@ -68,129 +81,96 @@ async def dashboard():
 
 @app.get("/health")
 async def health():
-    return {
-        "status": "ok",
-        "project": "MSB",
-        "protocol_version": PROTOCOL_VERSION,
-    }
+    return {"status": "ok", "project": "MSB", "protocol_version": PROTOCOL_VERSION}
+
+
+@app.post("/v1/journal", status_code=201)
+async def create_journal(request: JournalCreateRequest):
+    try:
+        record = create_journal_record(**request.model_dump(), protocol_version=PROTOCOL_VERSION)
+        return journal_store.append(record)
+    except (TypeError, ValueError) as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@app.get("/v1/journal")
+async def list_journal(limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0),
+                       market: str | None = None, symbol: str | None = None):
+    try:
+        return {"records": journal_store.list_records(limit=limit, offset=offset, market=market, symbol=symbol)}
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@app.get("/v1/journal/{journal_id}")
+async def get_journal(journal_id: str):
+    record = journal_store.get(journal_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="journal record not found")
+    return record
 
 
 @app.post("/v1/research/report")
 async def research_report(request: ResearchReportRequest):
-    """Run isolated walk-forward and bootstrap research on supplied OHLCV data.
-
-    This endpoint never generates a live signal and never combines datasets.
-    """
     ids = [item.dataset_id.strip() for item in request.datasets]
     if len(set(ids)) != len(ids):
         raise HTTPException(status_code=422, detail="dataset_id values must be unique")
     datasets = {item.dataset_id.strip(): item.candles for item in request.datasets}
     try:
-        return evaluate_research_universe(
-            datasets,
-            initial_train_bars=request.initial_train_bars,
-            test_bars=request.test_bars,
-            simulations=request.simulations,
-            seed=request.seed,
-        )
+        return evaluate_research_universe(datasets, initial_train_bars=request.initial_train_bars,
+            test_bars=request.test_bars, simulations=request.simulations, seed=request.seed)
     except (TypeError, ValueError, KeyError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @app.post("/v1/research/market")
 async def research_market(request: MarketResearchRequest):
-    """Fetch provider history, then research only quality-passing datasets."""
     normalized = [symbol.strip() for symbol in request.symbols]
     if any(not symbol or len(symbol) > 32 for symbol in normalized):
         raise HTTPException(status_code=422, detail="invalid symbol")
     if len({symbol.upper() for symbol in normalized}) != len(normalized):
         raise HTTPException(status_code=422, detail="symbols must be unique")
     provider = get_data_provider(request.market)
-    accepted: dict[str, list[dict[str, Any]]] = {}
-    rejected: dict[str, dict[str, Any]] = {}
+    accepted, rejected = {}, {}
     for symbol in normalized:
         dataset_id = f"{symbol.upper()}:{request.horizon}"
         try:
-            result = await provider.get_market_data(
-                market=request.market, symbol=symbol, horizon=request.horizon
-            )
+            result = await provider.get_market_data(market=request.market, symbol=symbol, horizon=request.horizon)
         except Exception as error:
-            # A single provider failure must not abort research for other symbols.
-            # Keep the public response useful without leaking exception details.
-            rejected[dataset_id] = {
-                "available": False,
-                "fresh": False,
-                "complete": False,
-                "issues": ["provider_error"],
-                "error_type": type(error).__name__,
-            }
+            rejected[dataset_id] = {"available": False, "fresh": False, "complete": False,
+                                    "issues": ["provider_error"], "error_type": type(error).__name__}
             continue
         if not (result.available and result.fresh and result.complete):
-            rejected[dataset_id] = {
-                "source": result.source,
-                "available": result.available,
-                "fresh": result.fresh,
-                "complete": result.complete,
-                "issues": result.issues,
-            }
+            rejected[dataset_id] = {"source": result.source, "available": result.available,
+                "fresh": result.fresh, "complete": result.complete, "issues": result.issues}
             continue
         candles = result.data.get("candles")
         if not isinstance(candles, list):
-            rejected[dataset_id] = {
-                "source": result.source, "issues": ["missing_candles"]
-            }
+            rejected[dataset_id] = {"source": result.source, "issues": ["missing_candles"]}
             continue
         checked = validate_ohlcv(candles)
         if not checked["valid"] or not checked["complete"]:
-            rejected[dataset_id] = {
-                "source": result.source,
-                "available": result.available,
-                "fresh": result.fresh,
-                "complete": False,
-                "issues": ["provider_data_integrity_failed", *checked["issues"]],
-            }
+            rejected[dataset_id] = {"source": result.source, "complete": False,
+                "issues": ["provider_data_integrity_failed", *checked["issues"]]}
             continue
         candles = checked["candles"]
-        minimum_bars = request.initial_train_bars + request.test_bars
-        if len(candles) < minimum_bars:
-            rejected[dataset_id] = {
-                "source": result.source,
-                "available": result.available,
-                "fresh": result.fresh,
-                "complete": result.complete,
-                "issues": ["insufficient_history_for_requested_walk_forward"],
-                "candle_count": len(candles),
-                "minimum_required": minimum_bars,
-            }
+        minimum = request.initial_train_bars + request.test_bars
+        if len(candles) < minimum:
+            rejected[dataset_id] = {"source": result.source, "issues": ["insufficient_history_for_requested_walk_forward"],
+                                    "candle_count": len(candles), "minimum_required": minimum}
             continue
         accepted[dataset_id] = candles
     if not accepted:
-        return {
-            "status": "NO_QUALITY_PASSING_DATASETS",
-            "market": request.market,
-            "horizon": request.horizon,
-            "accepted_dataset_count": 0,
-            "rejected": rejected,
-            "research_only": True,
-        }
+        return {"status": "NO_QUALITY_PASSING_DATASETS", "market": request.market,
+                "horizon": request.horizon, "accepted_dataset_count": 0, "rejected": rejected,
+                "research_only": True}
     try:
-        report = evaluate_research_universe(
-            accepted,
-            initial_train_bars=request.initial_train_bars,
-            test_bars=request.test_bars,
-            simulations=request.simulations,
-            seed=request.seed,
-        )
+        report = evaluate_research_universe(accepted, initial_train_bars=request.initial_train_bars,
+            test_bars=request.test_bars, simulations=request.simulations, seed=request.seed)
     except (TypeError, ValueError, KeyError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
-    return {
-        "status": "REPORT_CREATED",
-        "market": request.market,
-        "horizon": request.horizon,
-        "accepted_dataset_count": len(accepted),
-        "rejected": rejected,
-        "report": report,
-    }
+    return {"status": "REPORT_CREATED", "market": request.market, "horizon": request.horizon,
+            "accepted_dataset_count": len(accepted), "rejected": rejected, "report": report}
 
 
 @app.post("/v1/analyze", response_model=AnalysisResponse)
@@ -198,58 +178,30 @@ async def analyze(request: AnalyzeRequest):
     intent = resolve_intent(request.query)
     horizon = request.horizon or intent["horizon"]
     provider = get_data_provider(request.market)
-
     try:
-        market_data = await provider.get_market_data(
-            market=request.market,
-            symbol=request.symbol,
-            horizon=horizon,
-        )
+        market_data = await provider.get_market_data(market=request.market, symbol=request.symbol, horizon=horizon)
     except Exception:
-        # Provider outages must produce a safe, explicit no-trade response.
-        market_data = MarketDataResult(
-            available=False,
-            fresh=False,
-            complete=False,
-            data={},
-            source=getattr(provider, "name", "unknown"),
-            issues=["provider_error"],
-        )
-
-    quality = validate_data_quality(
-        {
-            "available": market_data.available,
-            "fresh": market_data.fresh,
-            "complete": market_data.complete,
-        }
-    )
+        market_data = MarketDataResult(available=False, fresh=False, complete=False, data={},
+            source=getattr(provider, "name", "unknown"), issues=["provider_error"])
+    quality = validate_data_quality({"available": market_data.available, "fresh": market_data.fresh,
+                                      "complete": market_data.complete})
     if market_data.issues:
-        quality.issues.extend(
-            issue for issue in market_data.issues if issue not in quality.issues
-        )
-
-    indicators = None
-    evidence: list[str] = []
+        quality.issues.extend(issue for issue in market_data.issues if issue not in quality.issues)
+    indicators, evidence = None, []
     reasoning = [f"Data source: {market_data.source}."]
-
     if quality.available:
         try:
-            raw_candles = market_data.data.get("candles", [])
-            checked_candles = validate_ohlcv(raw_candles)
-            if not checked_candles["valid"] or not checked_candles["complete"]:
+            checked = validate_ohlcv(market_data.data.get("candles", []))
+            if not checked["valid"] or not checked["complete"]:
                 raise ValueError("provider candles failed current-time validation")
-            indicators = calculate_indicators(checked_candles["candles"])
-            evidence = [
-                f"Market regime: {indicators['market_regime']}.",
-                f"Momentum state: {indicators['momentum_state']}.",
-                f"RSI state: {indicators['rsi_state']}.",
-                f"Volume state: {indicators['volume_state']}.",
-                f"Price above SMA20: {indicators['price_above_sma20']}.",
+            indicators = calculate_indicators(checked["candles"])
+            evidence = [f"Market regime: {indicators['market_regime']}.",
+                f"Momentum state: {indicators['momentum_state']}.", f"RSI state: {indicators['rsi_state']}.",
+                f"Volume state: {indicators['volume_state']}.", f"Price above SMA20: {indicators['price_above_sma20']}.",
                 f"Price above SMA50: {indicators['price_above_sma50']}.",
                 f"Price above SMA200: {indicators['price_above_sma200']}.",
                 f"Bullish SMA alignment: {indicators['trend_alignment_bullish']}.",
-                f"20-candle breakout: {indicators['breakout20']}.",
-            ]
+                f"20-candle breakout: {indicators['breakout20']}."]
             reasoning.append("Market data passed integrity and freshness checks.")
         except (KeyError, TypeError, ValueError):
             quality.available = False
@@ -257,27 +209,8 @@ async def analyze(request: AnalyzeRequest):
             reasoning.append("Indicator calculation was skipped because the provider data was invalid.")
     else:
         reasoning.append("Market data did not pass all quality checks.")
-
-    reasoning.extend(
-        [
-            "No validated trading strategy is enabled yet.",
-            "No fabricated signal is allowed.",
-        ]
-    )
-
-    return AnalysisResponse(
-        protocol_version=PROTOCOL_VERSION,
-        decision="NO_TRADE",
-        market=request.market,
-        symbol=request.symbol.upper() if request.symbol else None,
-        horizon=horizon,
-        data_source=market_data.source,
-        data_as_of=market_data.data.get("as_of"),
-        indicators=indicators,
-        evidence=evidence,
-        reasoning=reasoning,
-        invalidation=[
-            "An actionable signal requires a validated strategy and verified data."
-        ],
-        data_quality=quality,
-    )
+    reasoning.extend(["No validated trading strategy is enabled yet.", "No fabricated signal is allowed."])
+    return AnalysisResponse(protocol_version=PROTOCOL_VERSION, decision="NO_TRADE", market=request.market,
+        symbol=request.symbol.upper() if request.symbol else None, horizon=horizon, data_source=market_data.source,
+        data_as_of=market_data.data.get("as_of"), indicators=indicators, evidence=evidence, reasoning=reasoning,
+        invalidation=["An actionable signal requires a validated strategy and verified data."], data_quality=quality)
