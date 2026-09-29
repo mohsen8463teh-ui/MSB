@@ -71,7 +71,7 @@ class OkxSpotMarketDataProvider(MarketDataProvider):
         rows_by_timestamp: dict[str, list] = {}
         after: str | None = None
 
-        for _ in range(6):
+        for _ in range(8):
             params = {"instId": inst_id, "bar": bar, "limit": "100"}
             if after is not None:
                 params["after"] = after
@@ -97,10 +97,13 @@ class OkxSpotMarketDataProvider(MarketDataProvider):
             if len(rows_by_timestamp) >= target_count:
                 break
 
-        return sorted(
+        ordered = sorted(
             rows_by_timestamp.values(),
             key=lambda row: int(row[0]),
         )
+        # Keep the newest requested window after pagination; pages can
+        # overshoot the target by up to one page.
+        return ordered[-target_count:]
 
     async def get_market_data(
         self,
@@ -127,7 +130,7 @@ class OkxSpotMarketDataProvider(MarketDataProvider):
             ) as client:
                 if horizon == "1y":
                     rows = await self._fetch_1y_history(
-                        client, inst_id, bar, min_history
+                        client, inst_id, bar, min_history + 2
                     )
                 else:
                     response = await client.get(
