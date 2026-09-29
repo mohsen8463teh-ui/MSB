@@ -105,15 +105,26 @@ def evaluate_research_universe(
         continuous_trades = (
             continuous_oos["trades"] if continuous_oos is not None else None
         )
+        continuous_closed_trades = (
+            len(continuous_trades) if continuous_trades is not None else None
+        )
+        walk_forward_closed_trades = walk["closed_trades"]
         reports[dataset_id] = {
             "dataset_id": dataset_id,
             "walk_forward": walk,
             "continuous_oos": continuous_oos,
             "monte_carlo": monte_carlo,
+            # Folds reset to flat independently; continuous OOS does not.
+            # Expose the comparison as a diagnostic, not an invariant.
+            "walk_forward_closed_trades": walk_forward_closed_trades,
+            "continuous_oos_closed_trades": continuous_closed_trades,
+            "closed_trade_count_delta_continuous_minus_walk_forward": (
+                continuous_closed_trades - walk_forward_closed_trades
+                if continuous_closed_trades is not None else None
+            ),
             "trade_count_consistent": (
-                len(continuous_trades) == walk["closed_trades"]
-                if continuous_trades is not None
-                else None
+                continuous_closed_trades == walk_forward_closed_trades
+                if continuous_closed_trades is not None else None
             ),
         }
     return {

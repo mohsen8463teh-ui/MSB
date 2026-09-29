@@ -89,3 +89,28 @@ def test_research_report_skips_monte_carlo_for_gapped_test_windows():
 def test_research_report_rejects_invalid_configuration_before_processing(kwargs):
     with pytest.raises(ValueError):
         evaluate_research_universe({"BTC:1d": rising_candles()}, **kwargs)
+
+
+def test_research_report_exposes_trade_count_comparison_as_diagnostic():
+    report = evaluate_research_universe(
+        {"BTC:1d": rising_candles()},
+        initial_train_bars=300,
+        test_bars=80,
+        fee_bps=0,
+        slippage_bps=0,
+        simulations=100,
+    )["reports"]["BTC:1d"]
+
+    assert report["walk_forward_closed_trades"] == report["walk_forward"]["closed_trades"]
+    assert report["continuous_oos_closed_trades"] == len(report["continuous_oos"]["trades"])
+    assert report["closed_trade_count_delta_continuous_minus_walk_forward"] == (
+        report["continuous_oos_closed_trades"] - report["walk_forward_closed_trades"]
+    )
+    assert report["trade_count_consistent"] is (
+        report["closed_trade_count_delta_continuous_minus_walk_forward"] == 0
+    )
+
+
+def test_research_report_rejects_invalid_dataset_identifier_before_processing():
+    with pytest.raises(ValueError, match="dataset identifiers"):
+        evaluate_research_universe({" ": rising_candles()})
