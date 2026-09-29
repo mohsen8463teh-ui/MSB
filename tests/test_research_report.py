@@ -64,3 +64,28 @@ def test_research_report_skips_monte_carlo_for_gapped_test_windows():
 
     assert report["continuous_oos"] is None
     assert report["monte_carlo"]["status"] == "SKIPPED_NON_CONTIGUOUS_TEST_WINDOWS"
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"initial_train_bars": True},
+        {"initial_train_bars": 199},
+        {"test_bars": 1},
+        {"step_bars": 1, "test_bars": 2},
+        {"simulations": 99},
+        {"simulations": True},
+        {"minimum_trades": 0},
+        {"seed": False},
+        {"initial_cash": 0},
+        {"initial_cash": float("nan")},
+        {"fee_bps": -1},
+        {"slippage_bps": -1},
+        {"max_exposure_fraction": 0},
+        {"max_exposure_fraction": 1.1},
+        {"max_exposure_fraction": float("inf")},
+    ],
+)
+def test_research_report_rejects_invalid_configuration_before_processing(kwargs):
+    with pytest.raises(ValueError):
+        evaluate_research_universe({"BTC:1d": rising_candles()}, **kwargs)
