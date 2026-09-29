@@ -95,7 +95,8 @@ def evaluate_research_universe(
         "reports": reports,
         "limitations": [
             "Each dataset is evaluated independently; results are not pooled",
-            "Continuous out-of-sample portfolio starts flat at the first test bar and remains invested across adjacent test-window boundaries",\n            "Monte Carlo resamples closed trades from the continuous out-of-sample portfolio only; skipped when test windows have gaps",
+            "Continuous out-of-sample portfolio starts flat at the first test bar and remains invested across adjacent test-window boundaries",
+            "Monte Carlo resamples closed trades from the continuous out-of-sample portfolio only; skipped when test windows have gaps",
             "Bootstrap assumes exchangeability and does not preserve trade order or dependence",
             "No report is evidence of future profitability",
         ],
