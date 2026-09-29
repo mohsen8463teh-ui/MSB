@@ -64,6 +64,33 @@ def test_crypto_market_data_and_indicators_never_create_actionable_signal(monkey
     assert "No validated trading strategy is enabled yet." in body["reasoning"]
 
 
+
+def test_conflicting_query_horizons_are_not_resolved_or_guessed(monkeypatch):
+    observed = {}
+
+    class CapturingProvider:
+        name = "capturing_provider"
+
+        async def get_market_data(self, market, symbol, horizon):
+            observed["horizon"] = horizon
+            return MarketDataResult(
+                available=False, fresh=False, complete=False,
+                data={}, source=self.name, issues=["missing_horizon"],
+            )
+
+    monkeypatch.setattr(main_module, "crypto_spot_provider", CapturingProvider())
+    response = client.post("/v1/analyze", json={
+        "query": "analyze BTC for one day or one week",
+        "market": "crypto_spot",
+        "symbol": "BTCUSDT",
+    })
+
+    assert response.status_code == 200
+    assert observed["horizon"] is None
+    assert response.json()["horizon"] is None
+    assert response.json()["decision"] == "NO_TRADE"
+
+
 def test_crypto_provider_failure_is_reported_without_fake_signal(monkeypatch):
     class FailedProvider:
         name = "test_provider"
