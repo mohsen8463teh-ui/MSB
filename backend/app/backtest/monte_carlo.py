@@ -24,7 +24,12 @@ def bootstrap_trade_returns(
         raise ValueError("simulations must be an integer >= 100")
     if isinstance(seed, bool) or not isinstance(seed, int):
         raise ValueError("seed must be an integer")
-    if isinstance(initial_equity, bool) or not math.isfinite(initial_equity) or initial_equity <= 0:
+    if (
+        isinstance(initial_equity, bool)
+        or not isinstance(initial_equity, (int, float))
+        or not math.isfinite(initial_equity)
+        or initial_equity <= 0
+    ):
         raise ValueError("initial_equity must be finite and positive")
     if isinstance(minimum_trades, bool) or not isinstance(minimum_trades, int) or minimum_trades < 1:
         raise ValueError("minimum_trades must be a positive integer")
