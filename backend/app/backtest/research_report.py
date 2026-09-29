@@ -69,11 +69,19 @@ def evaluate_research_universe(
                 initial_equity=initial_cash,
                 minimum_trades=minimum_trades,
             )
+        continuous_trades = (
+            continuous_oos["trades"] if continuous_oos is not None else None
+        )
         reports[dataset_id] = {
             "dataset_id": dataset_id,
             "walk_forward": walk,
+            "continuous_oos": continuous_oos,
             "monte_carlo": monte_carlo,
-            "trade_count_consistent": len(trades) == walk["closed_trades"],
+            "trade_count_consistent": (
+                len(continuous_trades) == walk["closed_trades"]
+                if continuous_trades is not None
+                else None
+            ),
         }
     return {
         "method": "per_dataset_walk_forward_with_continuous_oos_when_windows_are_adjacent",
