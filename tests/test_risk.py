@@ -29,6 +29,7 @@ def test_size_is_capped_by_available_cash_and_exposure():
     {"equity": 100, "risk_fraction": .01, "entry": 10, "stop": 11, "available_cash": 10},
     {"equity": 100, "risk_fraction": .01, "entry": 10, "stop": 9, "available_cash": -1},
     {"equity": math.inf, "risk_fraction": .01, "entry": 10, "stop": 9, "available_cash": 10},
+    {"equity": 1e308, "risk_fraction": 1.0, "entry": 1e-308, "stop": 5e-309, "available_cash": 1e308},
 ])
 def test_invalid_inputs_fail_closed(kwargs):
     with pytest.raises(ValueError):
