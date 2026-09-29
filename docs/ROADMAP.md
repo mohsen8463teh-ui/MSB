@@ -63,16 +63,17 @@
 
 - [x] Research-only long-only SMA baseline
 - [ ] Validated spot/futures rules
-- [ ] Entry, stop, targets, and risk/reward
+- [x] Informational long-only position sizing capped by risk budget, cash, and exposure (calculator only; not a signal/order)\n- [ ] Entry, stop, targets, and risk/reward
 - [ ] Invalidation and signal validity
 
 ## Phase 5 — Journal
 
-- [ ] Signal ID and timestamp
-- [ ] Market, symbol, direction, and horizon
-- [ ] Entry, stop, and targets
-- [ ] Data references and protocol/model versions
-- [ ] Final outcome
+- [x] Signal ID and timestamp (journal UUID and UTC creation time)
+- [x] Market, symbol, direction, and horizon
+- [x] Entry, stop, and targets (optional research metadata)
+- [x] Data source type, evidence, and protocol/model versions
+- [ ] Final outcome (append-only journal currently preserves null; outcome capture/verification remains pending)
+- [x] SQLite persistence, filtering, pagination, and record retrieval (NO_TRADE only; no order authorization)
 
 ## Phase 6 — Evaluation
 
