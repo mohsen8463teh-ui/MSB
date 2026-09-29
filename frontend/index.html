@@ -215,6 +215,26 @@
       <div id="research-output" class="section" aria-live="polite"></div>
     </section>
 
+    <section class="card section" style="margin-top:18px">
+      <h3>محاسبه‌گر اندازه موقعیت (پژوهشی)</h3>
+      <p class="sub">محاسبه بر اساس بودجه ریسک، وجه نقد و سقف مواجهه؛ این ابزار سفارش ثبت نمی‌کند و مجوز معامله نیست.</p>
+      <form id="risk-form">
+        <div class="fields">
+          <div class="field"><label for="risk-equity">کل سرمایه</label><input id="risk-equity" type="number" min="0.01" step="any" required value="100000"></div>
+          <div class="field"><label for="risk-cash">وجه نقد قابل استفاده</label><input id="risk-cash" type="number" min="0" step="any" required value="100000"></div>
+        </div>
+        <div class="fields">
+          <div class="field"><label for="risk-fraction">درصد ریسک هر موقعیت (مثلاً ۱٪ = 0.01)</label><input id="risk-fraction" type="number" min="0.0001" max="1" step="any" required value="0.01"></div>
+          <div class="field"><label for="risk-exposure">سقف مواجهه (مثلاً ۵۰٪ = 0.5)</label><input id="risk-exposure" type="number" min="0.0001" max="1" step="any" required value="1"></div>
+        </div>
+        <div class="fields">
+          <div class="field"><label for="risk-entry">قیمت ورود فرضی</label><input id="risk-entry" type="number" min="0.000001" step="any" required value="100"></div>
+          <div class="field"><label for="risk-stop">حد توقف فرضی (کمتر از ورود)</label><input id="risk-stop" type="number" min="0.000001" step="any" required value="95"></div>
+        </div>
+        <button id="risk-submit" type="submit">محاسبه اندازه موقعیت</button>
+      </form>
+      <div id="risk-output" class="section" aria-live="polite"></div>
+    </section>
     <footer>M.S.B · داده ناقص = عدم صدور سیگنال · خروجی‌ها جایگزین بررسی مستقل نیستند.</footer>
   </main>
 
@@ -368,6 +388,36 @@
         button.disabled = false;
         button.textContent = "اجرای پژوهش";
       }
+    });
+
+    $("risk-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = $("risk-submit"), output = $("risk-output");
+      button.disabled = true; output.replaceChildren();
+      try {
+        const payload = {
+          equity: Number($("risk-equity").value),
+          available_cash: Number($("risk-cash").value),
+          risk_fraction: Number($("risk-fraction").value),
+          max_exposure_fraction: Number($("risk-exposure").value),
+          entry: Number($("risk-entry").value), stop: Number($("risk-stop").value)
+        };
+        const response = await fetch("/v1/risk/position-size", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify(payload)
+        });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.detail || "محاسبه ناموفق بود.");
+        const r = body.result;
+        output.appendChild(researchText("h4", "نتیجه صرفاً پژوهشی — بدون مجوز سفارش"));
+        [["تعداد محاسبه‌شده",r.quantity],["ارزش موقعیت",r.notional],
+         ["بودجه ریسک",r.risk_budget],["زیان برآوردی در توقف",r.estimated_loss_at_stop],
+         ["تعداد محدودشده با ریسک",r.quantity_by_risk],["تعداد محدودشده با وجه نقد/مواجهه",r.quantity_by_cash]
+        ].forEach(([label,value]) => output.appendChild(researchText("p",label+": "+number(value,6))));
+        output.appendChild(researchText("p","این محاسبه لغزش، شکاف قیمت، کارمزد و اجرای واقعی حد توقف را تضمین نمی‌کند."));
+      } catch(error) {
+        output.appendChild(researchText("p","خطا: "+error.message));
+      } finally { button.disabled=false; }
     });
 
     $("analysis-form").addEventListener("submit", async (event) => {
