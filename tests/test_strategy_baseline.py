@@ -86,3 +86,13 @@ def test_baseline_rejects_short_history():
 
     with pytest.raises(ValueError, match="at least 200"):
         generate_sma_trend_signals(candles_from_closes([100.0 + i for i in range(100)]))
+
+
+def test_baseline_rejects_future_dated_candles():
+    import pytest
+
+    rows = candles_from_closes([100.0 + index for index in range(200)])
+    rows[-1]["timestamp"] = 4_102_444_800.0  # 2100-01-01 UTC
+
+    with pytest.raises(ValueError, match="invalid candle series"):
+        generate_sma_trend_signals(rows)
