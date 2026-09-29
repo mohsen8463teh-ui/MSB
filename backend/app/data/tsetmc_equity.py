@@ -138,7 +138,12 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                 except (TypeError, ValueError):
                     return self._unavailable("invalid_daily_history_date")
 
-                if trading_date >= today_tehran:
+                # TSETMC daily history is session-dated. Future dates are
+                # malformed provider data; today's candle is still forming
+                # and is excluded from completed-candle analysis.
+                if trading_date > today_tehran:
+                    return self._unavailable("future_daily_history_date")
+                if trading_date == today_tehran:
                     continue
 
                 timestamp = datetime.combine(
