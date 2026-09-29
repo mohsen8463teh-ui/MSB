@@ -2,7 +2,7 @@ from .models import DataQuality
 
 
 def validate_data_quality(data: dict | None) -> DataQuality:
-    if not data:
+    if not isinstance(data, dict):
         return DataQuality(
             available=False,
             fresh=False,
@@ -11,19 +11,24 @@ def validate_data_quality(data: dict | None) -> DataQuality:
         )
 
     issues = []
-
-    if not data.get("available", False):
-        issues.append("market_data_unavailable")
-
-    if not data.get("fresh", False):
-        issues.append("market_data_not_fresh")
-
-    if not data.get("complete", False):
-        issues.append("market_data_incomplete")
+    flags = ("available", "fresh", "complete")
+    normalized = {}
+    for flag in flags:
+        value = data.get(flag)
+        normalized[flag] = value is True
+        if not isinstance(value, bool):
+            issues.append(f"market_data_invalid_{flag}_flag")
+        elif value is False:
+            issue = {
+                "available": "market_data_unavailable",
+                "fresh": "market_data_not_fresh",
+                "complete": "market_data_incomplete",
+            }[flag]
+            issues.append(issue)
 
     return DataQuality(
-        available=len(issues) == 0,
-        fresh=data.get("fresh", False),
-        complete=data.get("complete", False),
+        available=not issues,
+        fresh=normalized["fresh"],
+        complete=normalized["complete"],
         issues=issues,
     )
