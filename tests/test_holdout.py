@@ -75,3 +75,19 @@ def test_walk_forward_creates_chronological_non_overlapping_folds():
 def test_walk_forward_rejects_invalid_window_configuration(kwargs):
     with pytest.raises(ValueError):
         evaluate_baseline_walk_forward(rising_candles(500), **kwargs)
+
+
+@pytest.mark.parametrize("corruption", ["future_timestamp", "missing_close"])
+def test_walk_forward_validates_entire_input_including_untraded_tail(corruption):
+    candles = rising_candles(500)
+    if corruption == "future_timestamp":
+        candles[-1]["timestamp"] = 4_102_444_800.0  # 2100-01-01 UTC
+    else:
+        del candles[-1]["close"]
+
+    with pytest.raises(ValueError, match="invalid or incomplete candles"):
+        evaluate_baseline_walk_forward(
+            candles,
+            initial_train_bars=300,
+            test_bars=80,
+        )
