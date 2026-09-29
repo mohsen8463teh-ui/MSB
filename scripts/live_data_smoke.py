@@ -238,7 +238,11 @@ async def main():
     # Always run the TSETMC host reachability probe in CI. Previously this
     # diagnostic existed but was never called, hiding the actual network failure.
     report.append({"tsetmc_mirror_probe": await probe_tsetmc_mirrors()})
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+    rendered = json.dumps(report, ensure_ascii=False, indent=2)
+    print(rendered)
+    output_path = Path("artifacts/tsetmc-live-probe.json")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(rendered + "\\n", encoding="utf-8")
 
 
 if __name__ == "__main__":
