@@ -197,6 +197,9 @@ async def probe_tsetmc_mirrors():
 async def main():
     report = await probe_providers()
     report.append({"api_pipeline_1y": probe_api()})
+    # Always run the TSETMC host reachability probe in CI. Previously this
+    # diagnostic existed but was never called, hiding the actual network failure.
+    report.append({"tsetmc_mirror_probe": await probe_tsetmc_mirrors()})
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
