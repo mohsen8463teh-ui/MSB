@@ -234,7 +234,11 @@ async def analyze(request: AnalyzeRequest):
 
     if quality.available:
         try:
-            indicators = calculate_indicators(market_data.data.get("candles", []))
+            raw_candles = market_data.data.get("candles", [])
+            checked_candles = validate_ohlcv(raw_candles)
+            if not checked_candles["valid"] or not checked_candles["complete"]:
+                raise ValueError("provider candles failed current-time validation")
+            indicators = calculate_indicators(checked_candles["candles"])
             evidence = [
                 f"Market regime: {indicators['market_regime']}.",
                 f"Momentum state: {indicators['momentum_state']}.",

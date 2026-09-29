@@ -184,3 +184,28 @@ def test_analyze_never_calculates_indicators_from_stale_or_incomplete_data(monke
         assert body["indicators"] is None
         assert expected_issue in body["data_quality"]["issues"]
         assert body["evidence"] == []
+
+def test_analyze_rejects_future_candles_even_when_provider_flags_pass(monkeypatch):
+    class FutureProvider:
+        name = "future_provider"
+
+        async def get_market_data(self, market, symbol, horizon):
+            candles = valid_candles()
+            candles[-1]["timestamp"] = 4_102_444_800.0
+            return MarketDataResult(
+                available=True, fresh=True, complete=True,
+                data={"candles": candles}, source=self.name,
+            )
+
+    monkeypatch.setattr(main_module, "crypto_spot_provider", FutureProvider())
+    response = client.post("/v1/analyze", json={
+        "query": "analyze BTC for one day",
+        "market": "crypto_spot",
+        "symbol": "BTCUSDT",
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["decision"] == "NO_TRADE"
+    assert body["indicators"] is None
+    assert body["data_quality"]["available"] is False
+    assert "analysis_input_invalid" in body["data_quality"]["issues"]
