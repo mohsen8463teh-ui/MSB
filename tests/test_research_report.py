@@ -30,3 +30,37 @@ def test_research_report_keeps_datasets_separate_and_marks_small_samples():
 def test_rejects_empty_datasets(datasets):
     with pytest.raises(ValueError):
         evaluate_research_universe(datasets)
+
+
+
+def test_research_report_uses_continuous_oos_equity_not_sum_of_reset_folds():
+    report = evaluate_research_universe(
+        {"BTC:1d": rising_candles()},
+        initial_train_bars=300,
+        test_bars=80,
+        fee_bps=0,
+        slippage_bps=0,
+        simulations=100,
+    )["reports"]["BTC:1d"]
+
+    oos = report["continuous_oos"]
+    assert oos is not None
+    assert len(oos["equity_curve"]) == 200
+    assert oos["final_equity"] - oos["initial_cash"] == pytest.approx(
+        oos["realized_pnl"]
+        + (oos["open_position"]["unrealized_pnl"] if oos["open_position"] else 0)
+    )
+    assert report["monte_carlo"]["status"] == "INSUFFICIENT_TRADES"
+
+
+def test_research_report_skips_monte_carlo_for_gapped_test_windows():
+    report = evaluate_research_universe(
+        {"BTC:1d": rising_candles()},
+        initial_train_bars=300,
+        test_bars=80,
+        step_bars=100,
+        simulations=100,
+    )["reports"]["BTC:1d"]
+
+    assert report["continuous_oos"] is None
+    assert report["monte_carlo"]["status"] == "SKIPPED_NON_CONTIGUOUS_TEST_WINDOWS"
