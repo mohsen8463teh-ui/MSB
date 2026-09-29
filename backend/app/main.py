@@ -15,6 +15,7 @@ from .data.base import MarketDataResult
 from .data.crypto_spot import FallbackCryptoSpotMarketDataProvider
 from .data.placeholder import PlaceholderMarketDataProvider
 from .data.tsetmc_equity import TsetmcEquityMarketDataProvider
+from .data.validation import validate_ohlcv
 
 
 class ResearchDataset(BaseModel):
@@ -139,6 +140,17 @@ async def research_market(request: MarketResearchRequest):
                 "source": result.source, "issues": ["missing_candles"]
             }
             continue
+        checked = validate_ohlcv(candles)
+        if not checked["valid"] or not checked["complete"]:
+            rejected[dataset_id] = {
+                "source": result.source,
+                "available": result.available,
+                "fresh": result.fresh,
+                "complete": False,
+                "issues": ["provider_data_integrity_failed", *checked["issues"]],
+            }
+            continue
+        candles = checked["candles"]
         minimum_bars = request.initial_train_bars + request.test_bars
         if len(candles) < minimum_bars:
             rejected[dataset_id] = {

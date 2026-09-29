@@ -113,3 +113,23 @@ def test_market_research_rejects_each_failed_quality_flag(monkeypatch):
         item["issues"] == ["quality_flag_failed"]
         for item in body["rejected"].values()
     )
+
+
+def test_market_research_revalidates_provider_candles_before_accepting(monkeypatch):
+    class Provider:
+        async def get_market_data(self, market, symbol, horizon):
+            candles = rising_candles()
+            candles[-1]["close"] = float("nan")
+            return MarketDataResult(True, True, True, {"candles": candles}, "lying_provider", [])
+
+    monkeypatch.setattr(main_module, "crypto_spot_provider", Provider())
+    response = client.post("/v1/research/market", json={
+        "market": "crypto_spot", "symbols": ["BROKEN"], "horizon": "1d",
+        "initial_train_bars": 300, "test_bars": 80, "simulations": 100,
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "NO_QUALITY_PASSING_DATASETS"
+    rejected = body["rejected"]["BROKEN:1d"]
+    assert rejected["issues"][0] == "provider_data_integrity_failed"
+    assert "candle_499_contains_non_finite_or_non_numeric_values" in rejected["issues"]
