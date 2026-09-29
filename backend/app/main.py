@@ -13,6 +13,7 @@ from .core.journal import create_journal_record
 from .core.journal_store import JournalStore
 from .core.models import AnalyzeRequest, AnalysisResponse
 from .core.protocol import PROTOCOL_VERSION
+from .core.risk import calculate_long_position_size
 from .core.validator import validate_data_quality
 from .data.base import MarketDataResult
 from .data.crypto_spot import FallbackCryptoSpotMarketDataProvider
@@ -33,6 +34,15 @@ class JournalCreateRequest(BaseModel):
     stop: float | None = None
     targets: list[float] = Field(default_factory=list, max_length=20)
     notes: str = Field(default="", max_length=4000)
+
+
+class PositionSizeRequest(BaseModel):
+    equity: float = Field(gt=0, allow_inf_nan=False)
+    risk_fraction: float = Field(gt=0, le=1, allow_inf_nan=False)
+    entry: float = Field(gt=0, allow_inf_nan=False)
+    stop: float = Field(gt=0, allow_inf_nan=False)
+    available_cash: float = Field(ge=0, allow_inf_nan=False)
+    max_exposure_fraction: float = Field(default=1.0, gt=0, le=1, allow_inf_nan=False)
 
 
 class ResearchDataset(BaseModel):
@@ -108,6 +118,17 @@ async def get_journal(journal_id: str):
     if record is None:
         raise HTTPException(status_code=404, detail="journal record not found")
     return record
+
+
+@app.post("/v1/risk/position-size")
+async def position_size(request: PositionSizeRequest):
+    """Informational long-only size calculation; never submits an order."""
+    try:
+        result = calculate_long_position_size(**request.model_dump())
+        return {"status": "CALCULATED_RESEARCH_ONLY", "order_authorized": False,
+                "result": result.__dict__}
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @app.post("/v1/research/report")
