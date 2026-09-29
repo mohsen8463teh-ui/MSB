@@ -31,6 +31,20 @@ def test_resolve_supported_horizons(query, expected):
     assert result["supported_horizon"] is True
 
 
+@pytest.mark.parametrize(
+    "query",
+    [
+        "برای یک روز یا یک هفته تحلیل کن",
+        "compare 1 month with 1 year",
+        "امروز یا سه روز آینده",
+    ],
+)
+def test_conflicting_horizons_are_not_guessed(query):
+    result = resolve_intent(query)
+    assert result["horizon"] is None
+    assert result["supported_horizon"] is False
+
+
 def test_unknown_horizon_is_not_guessed():
     result = resolve_intent("یک سهم مناسب معرفی کن")
 
