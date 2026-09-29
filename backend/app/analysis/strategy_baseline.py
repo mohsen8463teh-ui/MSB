@@ -20,8 +20,7 @@ def generate_sma_trend_signals(
     """
     if not candles:
         raise ValueError("candles must not be empty")
-    last_timestamp = float(candles[-1]["timestamp"])
-    checked = validate_ohlcv(candles, now=last_timestamp + 1)
+    checked = validate_ohlcv(candles)
     if not checked["valid"] or not checked["complete"]:
         raise ValueError("invalid candle series: " + ", ".join(checked["issues"]))
 
