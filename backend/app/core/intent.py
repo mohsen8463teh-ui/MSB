@@ -34,12 +34,12 @@ _HORIZON_PATTERNS = (
 def resolve_intent(query: str) -> dict:
     """Resolve a supported analysis horizon from Persian or English text."""
     normalized = _normalize_query(query)
-    horizon = None
-
-    for pattern, value in _HORIZON_PATTERNS:
-        if re.search(pattern, normalized):
-            horizon = value
-            break
+    matches = [
+        value for pattern, value in _HORIZON_PATTERNS
+        if re.search(pattern, normalized)
+    ]
+    # Conflicting horizons are ambiguous: never silently choose one.
+    horizon = matches[0] if len(set(matches)) == 1 and matches else None
 
     return {
         "query": query,
