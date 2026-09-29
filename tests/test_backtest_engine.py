@@ -164,3 +164,45 @@ def test_backtest_rejects_future_dated_candles_before_simulation():
             [False, False],
             [False, False],
         )
+
+
+def test_equity_accounting_reconciles_with_realized_and_unrealized_pnl():
+    result = run_long_only_backtest(
+        candles([100, 110, 90, 95], [105, 100, 92, 98]),
+        [True, False, True, False],
+        [False, True, False, False],
+        initial_cash=1000,
+        fee_bps=20,
+        slippage_bps=10,
+        max_exposure_fraction=0.8,
+    )
+
+    open_position = result["open_position"]
+    assert open_position is not None
+    assert result["final_equity"] == pytest.approx(
+        result["cash_balance"] + open_position["units"] * 98
+    )
+    assert result["final_equity"] - result["initial_cash"] == pytest.approx(
+        result["realized_pnl"] + open_position["unrealized_pnl"]
+    )
+    assert result["total_return_pct"] == pytest.approx(
+        (result["final_equity"] / result["initial_cash"] - 1) * 100
+    )
+    assert 0 <= result["max_drawdown_pct"] < 100
+
+
+def test_fully_closed_equity_change_matches_realized_pnl():
+    result = run_long_only_backtest(
+        candles([100, 110, 120], [105, 115, 125]),
+        [True, False, False],
+        [False, True, False],
+        initial_cash=1000,
+        fee_bps=25,
+        slippage_bps=15,
+        max_exposure_fraction=0.75,
+    )
+
+    assert result["open_position"] is None
+    assert result["final_equity"] - result["initial_cash"] == pytest.approx(
+        result["realized_pnl"]
+    )
