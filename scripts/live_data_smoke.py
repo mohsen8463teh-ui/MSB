@@ -165,9 +165,43 @@ async def probe_tsetmc_mirrors():
         "Origin": "https://www.tsetmc.com",
     }
     for host in ("https://cdn.tsetmc.com/api", "https://cdn10.tsetmc.com/api"):
-        item = {"host": host, "search_ok": False, "history_ok": False, "candle_count": 0}
+        item = {
+            "host": host,
+            "search_ok": False,
+            "history_ok": False,
+            "market_watch_ok": False,
+            "candle_count": 0,
+            "market_watch_rows": 0,
+        }
         try:
             async with httpx.AsyncClient(timeout=15.0, headers=headers) as client:
+                # Probe live market watch separately; daily history is not live data.
+                market_watch_url = (
+                    host + "/ClosingPrice/GetMarketWatch"
+                    "?market=0&industrialGroup="
+                    "&paperTypes%5B0%5D=1&paperTypes%5B1%5D=2"
+                    "&paperTypes%5B2%5D=3&paperTypes%5B3%5D=4"
+                    "&paperTypes%5B4%5D=5&paperTypes%5B5%5D=6"
+                    "&paperTypes%5B6%5D=7&paperTypes%5B7%5D=8"
+                    "&paperTypes%5B8%5D=9&showTraded=false"
+                    "&withBestLimits=false&hEven=0&RefID=0"
+                )
+                watch_response = await client.get(market_watch_url)
+                item["market_watch_status"] = watch_response.status_code
+                watch_response.raise_for_status()
+                watch_payload = watch_response.json()
+                watch_rows = (
+                    watch_payload.get("marketwatch", [])
+                    if isinstance(watch_payload, dict) else []
+                )
+                if isinstance(watch_rows, list):
+                    item["market_watch_rows"] = len(watch_rows)
+                    item["market_watch_ok"] = len(watch_rows) > 0
+                    item["market_watch_sample_keys"] = (
+                        sorted(watch_rows[0].keys())[:30]
+                        if watch_rows and isinstance(watch_rows[0], dict) else []
+                    )
+
                 response = await client.get(
                     host + "/Instrument/GetInstrumentSearch/" + quote("فملی", safe="")
                 )
