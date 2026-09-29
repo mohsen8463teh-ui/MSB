@@ -21,7 +21,7 @@ establish trading profitability or validate a strategy for live capital.
   chronological holdout evaluator. None is enabled as a live signal.
 - Backtest reporting separates closed-trade realized PnL from open-position
   mark-to-market equity and uninvested cash.
-- 64 automated tests pass in GitHub Actions (one dependency deprecation warning).
+- Automated tests run in GitHub Actions; current CI status is the source of truth for the count.\n- Append-only SQLite research journal with create/list/get API; records are NO_TRADE only, and TEST/FIXTURE records cannot claim live timestamps.\n- Informational long-only position-size calculator capped by risk budget, available cash, and exposure; it does not authorize or submit orders.
 - Live GitHub-runner probe: OKX returned 399 complete daily candles for the
   one-year request; the API produced indicators and remained NO_TRADE.
   The fixed 120-bar holdout had zero closed trades and therefore no realized
