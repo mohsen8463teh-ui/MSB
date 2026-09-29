@@ -169,7 +169,9 @@ async def probe_tsetmc_mirrors():
             "host": host,
             "search_ok": False,
             "history_ok": False,
-            "market_watch_ok": False,
+            "market_watch_http_ok": False,
+            "market_watch_payload_ok": False,
+            "market_watch_has_rows": False,
             "candle_count": 0,
             "market_watch_rows": 0,
         }
@@ -189,14 +191,16 @@ async def probe_tsetmc_mirrors():
                 watch_response = await client.get(market_watch_url)
                 item["market_watch_status"] = watch_response.status_code
                 watch_response.raise_for_status()
+                item["market_watch_http_ok"] = True
                 watch_payload = watch_response.json()
                 watch_rows = (
-                    watch_payload.get("marketwatch", [])
-                    if isinstance(watch_payload, dict) else []
+                    watch_payload.get("marketwatch")
+                    if isinstance(watch_payload, dict) else None
                 )
                 if isinstance(watch_rows, list):
+                    item["market_watch_payload_ok"] = True
                     item["market_watch_rows"] = len(watch_rows)
-                    item["market_watch_ok"] = len(watch_rows) > 0
+                    item["market_watch_has_rows"] = len(watch_rows) > 0
                     item["market_watch_sample_keys"] = (
                         sorted(watch_rows[0].keys())[:30]
                         if watch_rows and isinstance(watch_rows[0], dict) else []
