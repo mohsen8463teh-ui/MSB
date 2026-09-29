@@ -26,6 +26,39 @@ def evaluate_research_universe(
     """Evaluate each asset/timeframe independently; never pool their trades."""
     if not isinstance(datasets, Mapping) or not datasets:
         raise ValueError("datasets must be a non-empty mapping")
+    # Validate the complete report configuration at its public boundary so
+    # callers get deterministic errors before any dataset is processed.
+    integer_parameters = {
+        "initial_train_bars": (initial_train_bars, 200),
+        "test_bars": (test_bars, 2),
+        "simulations": (simulations, 100),
+        "minimum_trades": (minimum_trades, 1),
+    }
+    for name, (value, minimum) in integer_parameters.items():
+        if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+            raise ValueError(f"{name} must be an integer >= {minimum}")
+    if step_bars is not None and (
+        isinstance(step_bars, bool) or not isinstance(step_bars, int) or step_bars < test_bars
+    ):
+        raise ValueError("step_bars must be an integer >= test_bars")
+    if isinstance(seed, bool) or not isinstance(seed, int):
+        raise ValueError("seed must be an integer")
+    numeric_parameters = {
+        "initial_cash": initial_cash,
+        "fee_bps": fee_bps,
+        "slippage_bps": slippage_bps,
+        "max_exposure_fraction": max_exposure_fraction,
+    }
+    import math
+    for name, value in numeric_parameters.items():
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            raise ValueError(f"{name} must be finite")
+    if initial_cash <= 0:
+        raise ValueError("initial_cash must be positive")
+    if fee_bps < 0 or slippage_bps < 0:
+        raise ValueError("fee_bps and slippage_bps must be non-negative")
+    if not 0 < max_exposure_fraction <= 1:
+        raise ValueError("max_exposure_fraction must be in (0, 1]")
     reports: dict[str, Any] = {}
     for dataset_id, candles in datasets.items():
         if not isinstance(dataset_id, str) or not dataset_id.strip():
