@@ -22,6 +22,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install diagnostic dependency
+        run: python -m pip install --disable-pip-version-check requests
       - name: Probe official and legacy TSETMC endpoints
         env:
           SYMBOL: ${{ inputs.symbol }}
@@ -39,7 +41,7 @@ jobs:
                   try: return r.json()
                   except Exception: print(label+": non-JSON"); return None
               except Exception as e: print(f"{label}: ERROR {type(e).__name__}: {e}"); return None
-          symbol=os.getenv("SYMBOL","فملی").strip()
+          symbol=(os.getenv("SYMBOL") or "فملی").strip()
           mw=get("WEBGW_MARKET_WATCH","https://webgw.tse.ir/InstrumentProvider/api/v1/MarketWatch/MarketWatchCash/fa")
           items=mw.get("Items",[]) if isinstance(mw,dict) else []
           print("WEBGW_ITEMS:",len(items))
