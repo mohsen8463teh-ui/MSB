@@ -165,7 +165,11 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
             if last_http_error is not None:
                 return self._unavailable(f"tsetmc_http_{last_http_error.response.status_code}")
             if last_payload_error is not None:
-                return self._unavailable("invalid_tsetmc_json_payload")
+                payload_issue = {
+                    "invalid instrument search payload": "invalid_instrument_search_payload",
+                    "invalid daily history payload": "invalid_daily_history_payload",
+                }.get(str(last_payload_error), "invalid_tsetmc_json_payload")
+                return self._unavailable(payload_issue)
             return self._unavailable("tsetmc_all_hosts_unavailable")
         rows = history_payload["closingPriceDaily"]
         candles = []
