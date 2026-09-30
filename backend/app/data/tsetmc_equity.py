@@ -200,16 +200,12 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                 return self._unavailable("future_daily_history_date")
             if trading_date == today_tehran:
                 continue
-            # TSETMC can return placeholder rows for non-trading days: the
-            # traded OHLC fields and traded volume are zero while pClosing may
-            # contain a carried/stale value. Exclude only this exact signature;
-            # malformed or partially populated rows still fail validation.
-            if (
-                _is_zero_value(row.get("priceFirst"))
-                and _is_zero_value(row.get("priceMax"))
-                and _is_zero_value(row.get("priceMin"))
-                and _is_zero_value(row.get("qTotTran5J"))
-            ):
+            # A zero-volume row is not a traded daily candle. TSETMC may
+            # populate carried/stale closing or OHLC fields on halted and
+            # no-trade days; including them can create false OHLC violations
+            # or artificial returns. Keep the raw source untouched and omit
+            # these rows from the analytical series.
+            if _is_zero_value(row.get("qTotTran5J")):
                 excluded_no_trade_rows += 1
                 continue
             timestamp = datetime.combine(trading_date, time(12, 0), tzinfo=_TEHRAN).timestamp()
