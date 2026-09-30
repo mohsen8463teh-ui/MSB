@@ -334,3 +334,61 @@ def test_tsetmc_provider_fails_over_when_primary_returns_non_json():
         "cdn10.tsetmc.com",
         "cdn10.tsetmc.com",
     ]
+
+
+
+def test_tsetmc_provider_fails_over_when_primary_search_shape_is_invalid():
+    seen_hosts = []
+
+    def handler(request):
+        seen_hosts.append(request.url.host)
+        if request.url.host == "cdn.tsetmc.com":
+            return httpx.Response(200, json={"unexpected": []})
+        path = unquote(request.url.path)
+        if path.endswith("/Instrument/GetInstrumentSearch/فملی"):
+            return httpx.Response(200, json={"instrumentSearch": [
+                {"insCode": "12345678901234567", "lVal18AFC": "فملی"}
+            ]})
+        return httpx.Response(200, json={"closingPriceDaily": history_rows()})
+
+    provider = TsetmcEquityMarketDataProvider(
+        transport=httpx.MockTransport(handler),
+        clock=lambda: NOW,
+    )
+    result = asyncio.run(provider.get_market_data("iran_equity", "فملی", "1d"))
+
+    assert result.available is True
+    assert seen_hosts == [
+        "cdn.tsetmc.com",
+        "cdn10.tsetmc.com",
+        "cdn10.tsetmc.com",
+    ]
+
+
+def test_tsetmc_provider_fails_over_when_primary_history_shape_is_invalid():
+    seen_hosts = []
+
+    def handler(request):
+        seen_hosts.append(request.url.host)
+        path = unquote(request.url.path)
+        if path.endswith("/Instrument/GetInstrumentSearch/فملی"):
+            return httpx.Response(200, json={"instrumentSearch": [
+                {"insCode": "12345678901234567", "lVal18AFC": "فملی"}
+            ]})
+        if request.url.host == "cdn.tsetmc.com":
+            return httpx.Response(200, json={"unexpected": []})
+        return httpx.Response(200, json={"closingPriceDaily": history_rows()})
+
+    provider = TsetmcEquityMarketDataProvider(
+        transport=httpx.MockTransport(handler),
+        clock=lambda: NOW,
+    )
+    result = asyncio.run(provider.get_market_data("iran_equity", "فملی", "1d"))
+
+    assert result.available is True
+    assert seen_hosts == [
+        "cdn.tsetmc.com",
+        "cdn.tsetmc.com",
+        "cdn10.tsetmc.com",
+        "cdn10.tsetmc.com",
+    ]
