@@ -234,4 +234,7 @@ async def analyze(request: AnalyzeRequest):
     return AnalysisResponse(protocol_version=PROTOCOL_VERSION, decision="NO_TRADE", market=request.market,
         symbol=request.symbol.upper() if request.symbol else None, horizon=horizon, data_source=market_data.source,
         data_as_of=market_data.data.get("as_of"), indicators=indicators, evidence=evidence, reasoning=reasoning,
+        counter_evidence=[],
+        uncertainty=["No validated strategy is enabled for this market and horizon.", "Descriptive indicators do not establish a repeatable trading edge."],
+        no_trade_reason="NO_VALIDATED_STRATEGY",
         invalidation=["An actionable signal requires a validated strategy and verified data."], data_quality=quality)
