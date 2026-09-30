@@ -271,3 +271,34 @@ def test_tsetmc_provider_does_not_mark_invalid_candle_fields_available():
     result = asyncio.run(provider.get_market_data("iran_equity", "فملی", "1d"))
     assert result.available is False
     assert any("non_finite_or_non_numeric" in issue for issue in result.issues)
+
+
+def test_tsetmc_provider_fails_over_to_secondary_cdn_host():
+    seen_hosts = []
+
+    def handler(request):
+        seen_hosts.append(request.url.host)
+        if request.url.host == "cdn.tsetmc.com":
+            raise httpx.ConnectError("primary host unreachable")
+        path = unquote(request.url.path)
+        if path.endswith("/Instrument/GetInstrumentSearch/فملی"):
+            return httpx.Response(200, json={"instrumentSearch": [
+                {"insCode": "12345678901234567", "lVal18AFC": "فملی"}
+            ]})
+        if path.endswith("/ClosingPrice/GetClosingPriceDailyList/12345678901234567/500"):
+            return httpx.Response(200, json={"closingPriceDaily": history_rows()})
+        raise AssertionError(f"Unexpected URL: {request.url}")
+
+    provider = TsetmcEquityMarketDataProvider(
+        transport=httpx.MockTransport(handler),
+        clock=lambda: NOW,
+    )
+    result = asyncio.run(provider.get_market_data("iran_equity", "فملی", "1d"))
+
+    assert result.available is True
+    assert result.complete is True
+    assert seen_hosts == [
+        "cdn.tsetmc.com",
+        "cdn10.tsetmc.com",
+        "cdn10.tsetmc.com",
+    ]
