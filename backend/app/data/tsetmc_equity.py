@@ -189,6 +189,7 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
         rows = history_payload["closingPriceDaily"]
         candles = []
         excluded_no_trade_rows = 0
+        excluded_inconsistent_ohlc_rows = 0
         for row in rows:
             if not isinstance(row, dict):
                 return self._unavailable("malformed_daily_history_row")
@@ -209,14 +210,29 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                 excluded_no_trade_rows += 1
                 continue
             timestamp = datetime.combine(trading_date, time(12, 0), tzinfo=_TEHRAN).timestamp()
-            candles.append({
+            candle = {
                 "timestamp": timestamp,
                 "open": row.get("priceFirst"),
                 "high": row.get("priceMax"),
                 "low": row.get("priceMin"),
                 "close": row.get("pClosing"),
                 "volume": row.get("qTotTran5J"),
-            })
+            }
+            # TSETMC occasionally publishes a traded row whose OHLC envelope
+            # is internally inconsistent. Do not repair or synthesize prices:
+            # isolate and exclude only this specific corrupt row. Other
+            # validation failures (zero/non-numeric prices, bad timestamps,
+            # etc.) remain fail-closed below.
+            row_check = validate_ohlcv([candle], now=now)
+            if row_check["issues"] == ["candle_0_inconsistent_ohlc"]:
+                excluded_inconsistent_ohlc_rows += 1
+                continue
+            candles.append(candle)
+
+        total_traded_rows = len(candles) + excluded_inconsistent_ohlc_rows
+        tolerated_bad_rows = max(1, int(total_traded_rows * 0.005))
+        if excluded_inconsistent_ohlc_rows > tolerated_bad_rows:
+            return self._unavailable("too_many_inconsistent_daily_rows")
 
         candles.sort(key=lambda item: item["timestamp"])
         checked = validate_ohlcv(candles, now=now)
@@ -231,6 +247,10 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
         fresh = 0 <= age_seconds <= 5 * 24 * 60 * 60
         complete = len(checked["candles"]) >= 200
         issues = list(checked["issues"])
+        if excluded_inconsistent_ohlc_rows:
+            issues.append(
+                f"excluded_inconsistent_ohlc_rows:{excluded_inconsistent_ohlc_rows}"
+            )
         if not fresh:
             issues.append("market_data_not_fresh")
         if not complete:
@@ -243,6 +263,7 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                 "candles": checked["candles"],
                 "as_of": latest_timestamp,
                 "excluded_no_trade_rows": excluded_no_trade_rows,
+                "excluded_inconsistent_ohlc_rows": excluded_inconsistent_ohlc_rows,
             },
             source=self.name, issues=issues,
         )
