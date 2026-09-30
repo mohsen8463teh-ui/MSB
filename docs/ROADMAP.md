@@ -97,3 +97,7 @@
 
 - [x] Local Persian RTL analysis dashboard (API-backed; no trade execution)
 - [ ] Natural-language chat interface
+
+## Release gate
+
+See [COMPLETION_GATES.md](COMPLETION_GATES.md) for evidence required before either Iran equities or crypto spot can be marked complete.
