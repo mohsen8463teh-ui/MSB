@@ -31,6 +31,16 @@ def _normalize_symbol(value: str) -> str:
     return normalized.replace("ي", "ی").replace("ك", "ک").upper()
 
 
+def _is_zero_value(value) -> bool:
+    if isinstance(value, bool):
+        return False
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return math.isfinite(number) and number == 0
+
+
 class TsetmcEquityMarketDataProvider(MarketDataProvider):
     """Read-only TSETMC daily candles with exact-symbol resolution."""
 
@@ -178,6 +188,7 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
             return self._unavailable("tsetmc_all_hosts_unavailable")
         rows = history_payload["closingPriceDaily"]
         candles = []
+        excluded_no_trade_rows = 0
         for row in rows:
             if not isinstance(row, dict):
                 return self._unavailable("malformed_daily_history_row")
@@ -188,6 +199,18 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
             if trading_date > today_tehran:
                 return self._unavailable("future_daily_history_date")
             if trading_date == today_tehran:
+                continue
+            # TSETMC can return placeholder rows for non-trading days: the
+            # traded OHLC fields and traded volume are zero while pClosing may
+            # contain a carried/stale value. Exclude only this exact signature;
+            # malformed or partially populated rows still fail validation.
+            if (
+                _is_zero_value(row.get("priceFirst"))
+                and _is_zero_value(row.get("priceMax"))
+                and _is_zero_value(row.get("priceMin"))
+                and _is_zero_value(row.get("qTotTran5J"))
+            ):
+                excluded_no_trade_rows += 1
                 continue
             timestamp = datetime.combine(trading_date, time(12, 0), tzinfo=_TEHRAN).timestamp()
             candles.append({
@@ -223,6 +246,7 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                 "instrument_id": instrument_id,
                 "candles": checked["candles"],
                 "as_of": latest_timestamp,
+                "excluded_no_trade_rows": excluded_no_trade_rows,
             },
             source=self.name, issues=issues,
         )
