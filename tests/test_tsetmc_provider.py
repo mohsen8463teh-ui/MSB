@@ -79,6 +79,62 @@ def test_tsetmc_provider_resolves_exact_symbol_and_excludes_today():
 
 
 
+def test_tsetmc_provider_excludes_explicit_zero_volume_placeholder_rows():
+    def handler(request):
+        if "Instrument/GetInstrumentSearch" in request.url.path:
+            return httpx.Response(200, json={"instrumentSearch": [
+                {"insCode": "12345678901234567", "lVal18AFC": "فملی"}
+            ]})
+        rows = history_rows()
+        rows.append({
+            "dEven": 20241231,
+            "priceFirst": 0,
+            "priceMax": 0,
+            "priceMin": 0,
+            "pClosing": 2002,
+            "qTotTran5J": 0,
+        })
+        return httpx.Response(200, json={"closingPriceDaily": rows})
+
+    provider = TsetmcEquityMarketDataProvider(
+        transport=httpx.MockTransport(handler),
+        clock=lambda: NOW,
+    )
+    result = asyncio.run(provider.get_market_data("iran_equity", "فملی", "1d"))
+
+    assert result.available is True
+    assert result.complete is True
+    assert len(result.data["candles"]) == 220
+    assert result.data["excluded_no_trade_rows"] == 1
+    assert all(candle["open"] > 0 for candle in result.data["candles"])
+
+
+def test_tsetmc_provider_still_rejects_zero_prices_when_volume_is_positive():
+    def handler(request):
+        if "Instrument/GetInstrumentSearch" in request.url.path:
+            return httpx.Response(200, json={"instrumentSearch": [
+                {"insCode": "12345678901234567", "lVal18AFC": "فملی"}
+            ]})
+        rows = history_rows()
+        rows[1].update({
+            "priceFirst": 0,
+            "priceMax": 0,
+            "priceMin": 0,
+            "pClosing": 2002,
+            "qTotTran5J": 100,
+        })
+        return httpx.Response(200, json={"closingPriceDaily": rows})
+
+    provider = TsetmcEquityMarketDataProvider(
+        transport=httpx.MockTransport(handler),
+        clock=lambda: NOW,
+    )
+    result = asyncio.run(provider.get_market_data("iran_equity", "فملی", "1d"))
+
+    assert result.available is False
+    assert any("non_positive_price" in issue for issue in result.issues)
+
+
 def test_tsetmc_provider_rejects_future_dated_history():
     def handler(request):
         if "Instrument/GetInstrumentSearch" in request.url.path:
