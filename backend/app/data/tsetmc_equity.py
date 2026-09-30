@@ -128,7 +128,7 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                     if len(exact) > 1:
                         return self._unavailable("ambiguous_instrument_symbol")
                     candidate_id = str(exact[0].get("insCode", ""))
-                    if not re.fullmatch(r"\\d{8,20}", candidate_id):
+                    if not re.fullmatch(r"\d{8,20}", candidate_id):
                         return self._unavailable("invalid_instrument_identifier")
                     history_response = await client.get(
                         f"/ClosingPrice/GetClosingPriceDailyList/{candidate_id}/500"
@@ -157,77 +157,55 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                 return self._unavailable(f"tsetmc_http_{last_http_error.response.status_code}")
             return self._unavailable("tsetmc_all_hosts_unavailable")
         rows = history_payload["closingPriceDaily"]
+        candles = []
+        for row in rows:
+            if not isinstance(row, dict):
+                return self._unavailable("malformed_daily_history_row")
+            try:
+                trading_date = datetime.strptime(str(row.get("dEven")), "%Y%m%d").date()
+            except (TypeError, ValueError):
+                return self._unavailable("invalid_daily_history_date")
+            if trading_date > today_tehran:
+                return self._unavailable("future_daily_history_date")
+            if trading_date == today_tehran:
+                continue
+            timestamp = datetime.combine(trading_date, time(12, 0), tzinfo=_TEHRAN).timestamp()
+            candles.append({
+                "timestamp": timestamp,
+                "open": row.get("priceFirst"),
+                "high": row.get("priceMax"),
+                "low": row.get("priceMin"),
+                "close": row.get("pClosing"),
+                "volume": row.get("qTotTran5J"),
+            })
 
-            candles = []
-            for row in rows:
-                if not isinstance(row, dict):
-                    return self._unavailable("malformed_daily_history_row")
-                try:
-                    trading_date = datetime.strptime(
-                        str(row.get("dEven")), "%Y%m%d"
-                    ).date()
-                except (TypeError, ValueError):
-                    return self._unavailable("invalid_daily_history_date")
-
-                # TSETMC daily history is session-dated. Future dates are
-                # malformed provider data; today's candle is still forming
-                # and is excluded from completed-candle analysis.
-                if trading_date > today_tehran:
-                    return self._unavailable("future_daily_history_date")
-                if trading_date == today_tehran:
-                    continue
-
-                timestamp = datetime.combine(
-                    trading_date, time(12, 0), tzinfo=_TEHRAN
-                ).timestamp()
-                candles.append(
-                    {
-                        "timestamp": timestamp,
-                        "open": row.get("priceFirst"),
-                        "high": row.get("priceMax"),
-                        "low": row.get("priceMin"),
-                        "close": row.get("pClosing"),
-                        "volume": row.get("qTotTran5J"),
-                    }
-                )
-
-            candles.sort(key=lambda item: item["timestamp"])
-            checked = validate_ohlcv(candles, now=now)
-            if not checked["valid"] or not checked["candles"]:
-                return MarketDataResult(
-                    available=False,
-                    fresh=False,
-                    complete=False,
-                    data={"candles": checked["candles"]},
-                    source=self.name,
-                    issues=checked["issues"] or ["invalid_daily_history"],
-                )
-
-            latest_timestamp = checked["candles"][-1]["timestamp"]
-            age_seconds = now - latest_timestamp
-            fresh = 0 <= age_seconds <= 5 * 24 * 60 * 60
-            complete = len(checked["candles"]) >= 200
-            issues = list(checked["issues"])
-            if not fresh:
-                issues.append("market_data_not_fresh")
-            if not complete:
-                issues.append("insufficient_history_for_indicators")
-
+        candles.sort(key=lambda item: item["timestamp"])
+        checked = validate_ohlcv(candles, now=now)
+        if not checked["valid"] or not checked["candles"]:
             return MarketDataResult(
-                available=True,
-                fresh=fresh,
-                complete=complete,
-                data={
-                    "symbol": _normalize_symbol(symbol),
-                    "instrument_id": instrument_id,
-                    "candles": checked["candles"],
-                    "as_of": latest_timestamp,
-                },
-                source=self.name,
-                issues=issues,
+                available=False, fresh=False, complete=False,
+                data={"candles": checked["candles"]}, source=self.name,
+                issues=checked["issues"] or ["invalid_daily_history"],
             )
-        except (ValueError, TypeError, KeyError, AttributeError):
-            return self._unavailable("invalid_tsetmc_response")
+        latest_timestamp = checked["candles"][-1]["timestamp"]
+        age_seconds = now - latest_timestamp
+        fresh = 0 <= age_seconds <= 5 * 24 * 60 * 60
+        complete = len(checked["candles"]) >= 200
+        issues = list(checked["issues"])
+        if not fresh:
+            issues.append("market_data_not_fresh")
+        if not complete:
+            issues.append("insufficient_history_for_indicators")
+        return MarketDataResult(
+            available=True, fresh=fresh, complete=complete,
+            data={
+                "symbol": _normalize_symbol(symbol),
+                "instrument_id": instrument_id,
+                "candles": checked["candles"],
+                "as_of": latest_timestamp,
+            },
+            source=self.name, issues=issues,
+        )
 
     def _unavailable(self, issue: str) -> MarketDataResult:
         return MarketDataResult(
