@@ -93,6 +93,7 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
 
         last_network_error = None
         last_http_error = None
+        last_payload_error = None
         search_payload = None
         history_payload = None
         instrument_id = None
@@ -149,12 +150,18 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
             except httpx.RequestError as error:
                 last_network_error = error
                 continue
+            except ValueError as error:
+                # A CDN may return an HTML/error body with HTTP 200; try the mirror.
+                last_payload_error = error
+                continue
 
         if history_payload is None or instrument_id is None:
             if last_network_error is not None:
                 return self._unavailable(f"tsetmc_network_{type(last_network_error).__name__}")
             if last_http_error is not None:
                 return self._unavailable(f"tsetmc_http_{last_http_error.response.status_code}")
+            if last_payload_error is not None:
+                return self._unavailable("invalid_tsetmc_json_payload")
             return self._unavailable("tsetmc_all_hosts_unavailable")
         rows = history_payload["closingPriceDaily"]
         candles = []
