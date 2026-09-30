@@ -80,6 +80,8 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
         market: str | None,
         symbol: str | None,
         horizon: str | None,
+        *,
+        _instrument_id: str | None = None,
     ) -> MarketDataResult:
         if market != "iran_equity":
             return self._unavailable("unsupported_market")
@@ -121,33 +123,39 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                     headers=headers,
                     follow_redirects=True,
                 ) as client:
-                    search_path = (
-                        "/Instrument/GetInstrumentSearch/"
-                        + quote(symbol.strip(), safe="")
-                    )
-                    search_response = await client.get(search_path)
-                    search_response.raise_for_status()
-                    candidate_search = search_response.json()
-                    if not isinstance(candidate_search, dict):
-                        last_payload_error = ValueError("invalid instrument search payload")
-                        continue
-                    matches = candidate_search.get("instrumentSearch")
-                    if not isinstance(matches, list):
-                        last_payload_error = ValueError("invalid instrument search payload")
-                        continue
-                    exact = [
-                        item for item in matches
-                        if isinstance(item, dict)
-                        and _normalize_symbol(str(item.get("lVal18AFC", "")))
-                        == _normalize_symbol(symbol)
-                    ]
-                    if len(exact) == 0:
-                        return self._unavailable("instrument_not_found")
-                    if len(exact) > 1:
-                        return self._unavailable("ambiguous_instrument_symbol")
-                    candidate_id = str(exact[0].get("insCode", ""))
-                    if not re.fullmatch(r"\d{8,20}", candidate_id):
-                        return self._unavailable("invalid_instrument_identifier")
+                    if _instrument_id is not None:
+                        candidate_id = str(_instrument_id)
+                        if not re.fullmatch(r"\d{8,20}", candidate_id):
+                            return self._unavailable("invalid_instrument_identifier")
+                        candidate_search = {"instrumentSearch": [{"insCode": candidate_id, "lVal18AFC": symbol}]}
+                    else:
+                        search_path = (
+                            "/Instrument/GetInstrumentSearch/"
+                            + quote(symbol.strip(), safe="")
+                        )
+                        search_response = await client.get(search_path)
+                        search_response.raise_for_status()
+                        candidate_search = search_response.json()
+                        if not isinstance(candidate_search, dict):
+                            last_payload_error = ValueError("invalid instrument search payload")
+                            continue
+                        matches = candidate_search.get("instrumentSearch")
+                        if not isinstance(matches, list):
+                            last_payload_error = ValueError("invalid instrument search payload")
+                            continue
+                        exact = [
+                            item for item in matches
+                            if isinstance(item, dict)
+                            and _normalize_symbol(str(item.get("lVal18AFC", "")))
+                            == _normalize_symbol(symbol)
+                        ]
+                        if len(exact) == 0:
+                            return self._unavailable("instrument_not_found")
+                        if len(exact) > 1:
+                            return self._unavailable("ambiguous_instrument_symbol")
+                        candidate_id = str(exact[0].get("insCode", ""))
+                        if not re.fullmatch(r"\d{8,20}", candidate_id):
+                            return self._unavailable("invalid_instrument_identifier")
                     history_response = await client.get(
                         f"/ClosingPrice/GetClosingPriceDailyList/{candidate_id}/500"
                     )
@@ -266,6 +274,20 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                 "excluded_inconsistent_ohlc_rows": excluded_inconsistent_ohlc_rows,
             },
             source=self.name, issues=issues,
+        )
+
+    async def get_market_data_by_instrument_id(
+        self,
+        market: str | None,
+        instrument_id: str | None,
+        symbol: str | None,
+        horizon: str | None,
+    ) -> MarketDataResult:
+        """Fetch history directly by the market-watch instrument ID, without symbol search."""
+        if not isinstance(instrument_id, str) or not re.fullmatch(r"\d{8,20}", instrument_id):
+            return self._unavailable("invalid_instrument_identifier")
+        return await self.get_market_data(
+            market, symbol, horizon, _instrument_id=instrument_id
         )
 
     def _unavailable(self, issue: str) -> MarketDataResult:
