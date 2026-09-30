@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import re
 import unicodedata
-from datetime import datetime, time
+from datetime import datetime, time, timezone, timedelta
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
@@ -13,7 +13,12 @@ from .base import MarketDataProvider, MarketDataResult
 from .validation import validate_ohlcv
 
 
-_TEHRAN = ZoneInfo("Asia/Tehran")
+try:
+    _TEHRAN = ZoneInfo("Asia/Tehran")
+except Exception:
+    # Iran has used UTC+03:30 year-round since 2023. Keep local diagnostics
+    # usable on minimal Android/Python images without an OS tz database.
+    _TEHRAN = timezone(timedelta(hours=3, minutes=30), name="Asia/Tehran")
 _USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
