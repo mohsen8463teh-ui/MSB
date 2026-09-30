@@ -114,10 +114,12 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                     search_response.raise_for_status()
                     candidate_search = search_response.json()
                     if not isinstance(candidate_search, dict):
-                        return self._unavailable("invalid_instrument_search_payload")
+                        last_payload_error = ValueError("invalid instrument search payload")
+                        continue
                     matches = candidate_search.get("instrumentSearch")
                     if not isinstance(matches, list):
-                        return self._unavailable("invalid_instrument_search_payload")
+                        last_payload_error = ValueError("invalid instrument search payload")
+                        continue
                     exact = [
                         item for item in matches
                         if isinstance(item, dict)
@@ -137,9 +139,11 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                     history_response.raise_for_status()
                     candidate_history = history_response.json()
                     if not isinstance(candidate_history, dict):
-                        return self._unavailable("invalid_daily_history_payload")
+                        last_payload_error = ValueError("invalid daily history payload")
+                        continue
                     if not isinstance(candidate_history.get("closingPriceDaily"), list):
-                        return self._unavailable("invalid_daily_history_payload")
+                        last_payload_error = ValueError("invalid daily history payload")
+                        continue
                     search_payload = candidate_search
                     history_payload = candidate_history
                     instrument_id = candidate_id
