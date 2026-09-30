@@ -458,3 +458,50 @@ def test_tsetmc_provider_fails_over_when_primary_history_shape_is_invalid():
         "cdn10.tsetmc.com",
         "cdn10.tsetmc.com",
     ]
+
+
+def test_tsetmc_provider_excludes_isolated_inconsistent_ohlc_row_without_repairing_prices():
+    def handler(request):
+        if "Instrument/GetInstrumentSearch" in request.url.path:
+            return httpx.Response(200, json={"instrumentSearch": [
+                {"insCode": "12345678901234567", "lVal18AFC": "فملی"}
+            ]})
+        rows = history_rows()
+        # One traded source row has a high below its close; it must be excluded,
+        # not silently corrected.
+        rows[10].update({"priceMax": 1, "qTotTran5J": 1000})
+        return httpx.Response(200, json={"closingPriceDaily": rows})
+
+    provider = TsetmcEquityMarketDataProvider(
+        transport=httpx.MockTransport(handler),
+        clock=lambda: NOW,
+    )
+    result = asyncio.run(provider.get_market_data("iran_equity", "فملی", "1d"))
+
+    assert result.available is True
+    assert result.complete is True
+    assert len(result.data["candles"]) == 219
+    assert result.data["excluded_inconsistent_ohlc_rows"] == 1
+    assert "excluded_inconsistent_ohlc_rows:1" in result.issues
+    assert all(candle["high"] >= candle["close"] for candle in result.data["candles"])
+
+
+def test_tsetmc_provider_fails_closed_when_inconsistent_ohlc_rows_exceed_tolerance():
+    def handler(request):
+        if "Instrument/GetInstrumentSearch" in request.url.path:
+            return httpx.Response(200, json={"instrumentSearch": [
+                {"insCode": "12345678901234567", "lVal18AFC": "فملی"}
+            ]})
+        rows = history_rows()
+        for row in rows[1:12]:
+            row.update({"priceMax": 1, "qTotTran5J": 1000})
+        return httpx.Response(200, json={"closingPriceDaily": rows})
+
+    provider = TsetmcEquityMarketDataProvider(
+        transport=httpx.MockTransport(handler),
+        clock=lambda: NOW,
+    )
+    result = asyncio.run(provider.get_market_data("iran_equity", "فملی", "1d"))
+
+    assert result.available is False
+    assert result.issues == ["too_many_inconsistent_daily_rows"]
