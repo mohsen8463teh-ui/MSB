@@ -21,15 +21,43 @@ establish trading profitability or validate a strategy for live capital.
   chronological holdout evaluator. None is enabled as a live signal.
 - Backtest reporting separates closed-trade realized PnL from open-position
   mark-to-market equity and uninvested cash.
-- Automated tests run in GitHub Actions; current CI status is the source of truth for the count.\n- Append-only SQLite research journal with create/list/get API; records are NO_TRADE only, and TEST/FIXTURE records cannot claim live timestamps.\n- Informational long-only position-size calculator capped by risk budget, available cash, and exposure; it does not authorize or submit orders.
-- Live GitHub-runner probe: OKX returned 399 complete daily candles for the
-  one-year request; the API produced indicators and remained NO_TRADE.
-  The fixed 120-bar holdout had zero closed trades and therefore no realized
-  strategy result. Binance returned HTTP 451; TSETMC timed out from that runner.
+- Append-only SQLite research journal with create/list/get API; records are
+  NO_TRADE only, and TEST/FIXTURE records cannot claim live timestamps.
+- Informational long-only position-size calculator capped by risk budget,
+  available cash, and exposure; it does not authorize or submit orders.
+- Automated tests run in GitHub Actions.
+- GitHub-hosted runner probe: OKX returned data, but TSETMC requests timed out
+  or failed to connect from that runner. This is a runner-network limitation;
+  a green workflow does not certify live TSETMC connectivity.
 
-Live connectivity from the user's own network, Iran market coverage, strategy
-validation, robust multi-asset walk-forward testing, journaling, and the full
-AI assistant interface remain separate implementation and verification tasks.
+## Run locally on Android / Termux (Iran equities)
+
+The TSETMC provider must execute from a network that can reach TSETMC. The
+successful Termux provider test confirms that the phone can reach it; GitHub
+Actions runs on separate hosted infrastructure and cannot use the phone's
+network.
+
+From the repository root, with the project virtual environment activated:
+
+```bash
+bash scripts/run_local_termux.sh
+```
+
+Then open this address in the browser on the same phone:
+
+`http://127.0.0.1:8000/`
+
+The script uses `.venv/bin/python` when available, checks runtime dependencies,
+and starts the existing FastAPI app bound to localhost only. Keep the Termux
+session running while using the dashboard. Stop it with Ctrl+C. The analysis
+request for an Iran equity symbol (for example, `فملی`) is then fetched by the
+API running on the phone, so TSETMC traffic originates from Termux rather than
+a GitHub runner. No external relay, VPS, or fabricated fallback data is used.
+
+If the dashboard is hosted on a remote server instead, this local-only setup
+does not automatically connect that server to the phone. A secure relay or a
+deployment inside a reachable network would be a separate requirement; do not
+expose a public unauthenticated data-ingest endpoint.
 
 ## Core principles
 
