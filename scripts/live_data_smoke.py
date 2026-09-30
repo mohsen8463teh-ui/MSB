@@ -151,6 +151,38 @@ def probe_api():
         }
 
 
+
+def probe_iran_equity_api():
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/v1/analyze",
+                json={
+                    "query": "analyze فملی for one week",
+                    "market": "iran_equity",
+                    "symbol": "فملی",
+                    "horizon": "1w",
+                },
+            )
+        if response.status_code != 200:
+            return {"http_status": response.status_code, "api_ok": False}
+        body = response.json()
+        indicators = body.get("indicators") or {}
+        quality = body.get("data_quality") or {}
+        return {
+            "http_status": response.status_code,
+            "api_ok": True,
+            "data_source": body.get("data_source"),
+            "data_ready": quality.get("available"),
+            "fresh": quality.get("fresh"),
+            "complete": quality.get("complete"),
+            "candles_used": indicators.get("candles_used", 0),
+            "decision": body.get("decision"),
+            "issues": quality.get("issues", []),
+        }
+    except Exception as error:
+        return {"api_ok": False, "error_type": type(error).__name__}
+
 async def probe_tsetmc_mirrors():
     # Test alternate TSETMC CDN hosts from the same runner that executes MSB.
     # This isolates host reachability before changing the production provider.
@@ -235,6 +267,7 @@ async def probe_tsetmc_mirrors():
 async def main():
     report = await probe_providers()
     report.append({"api_pipeline_1y": probe_api()})
+    report.append({"iran_equity_api_pipeline_1w": probe_iran_equity_api()})
     # Always run the TSETMC host reachability probe in CI. Previously this
     # diagnostic existed but was never called, hiding the actual network failure.
     report.append({"tsetmc_mirror_probe": await probe_tsetmc_mirrors()})
