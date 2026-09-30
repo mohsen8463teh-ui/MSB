@@ -25,7 +25,7 @@ def test_dashboard_serves_local_mobile_ui():
 
 def test_dashboard_ids_are_unique():
     html = dashboard_html()
-    ids = re.findall(r'\\bid="([^"]+)"', html)
+    ids = re.findall(r'\bid="([^"]+)"', html)
     duplicates = sorted(value for value, count in Counter(ids).items() if count > 1)
     assert duplicates == []
 
