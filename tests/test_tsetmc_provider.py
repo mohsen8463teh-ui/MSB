@@ -86,14 +86,24 @@ def test_tsetmc_provider_excludes_explicit_zero_volume_placeholder_rows():
                 {"insCode": "12345678901234567", "lVal18AFC": "فملی"}
             ]})
         rows = history_rows()
-        rows.append({
-            "dEven": 20241231,
-            "priceFirst": 0,
-            "priceMax": 0,
-            "priceMin": 0,
-            "pClosing": 2002,
-            "qTotTran5J": 0,
-        })
+        rows.extend([
+            {
+                "dEven": 20241231,
+                "priceFirst": 0,
+                "priceMax": 0,
+                "priceMin": 0,
+                "pClosing": 2002,
+                "qTotTran5J": 0,
+            },
+            {
+                "dEven": 20241230,
+                "priceFirst": 2100,
+                "priceMax": 2000,
+                "priceMin": 1900,
+                "pClosing": 1950,
+                "qTotTran5J": 0,
+            },
+        ])
         return httpx.Response(200, json={"closingPriceDaily": rows})
 
     provider = TsetmcEquityMarketDataProvider(
@@ -105,7 +115,7 @@ def test_tsetmc_provider_excludes_explicit_zero_volume_placeholder_rows():
     assert result.available is True
     assert result.complete is True
     assert len(result.data["candles"]) == 220
-    assert result.data["excluded_no_trade_rows"] == 1
+    assert result.data["excluded_no_trade_rows"] == 2
     assert all(candle["open"] > 0 for candle in result.data["candles"])
 
 
