@@ -2,9 +2,13 @@
 import asyncio
 import json
 import socket
+import sys
+from pathlib import Path
 from urllib.parse import quote
 
 import httpx
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from backend.app.data.tsetmc_equity import TsetmcEquityMarketDataProvider
 
