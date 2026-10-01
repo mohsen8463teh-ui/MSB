@@ -91,6 +91,27 @@ def test_market_watch_rejects_invalid_payload(payload):
     asyncio.run(run())
 
 
+def test_market_watch_falls_back_to_configured_cdn_mirror():
+    async def run():
+        calls = []
+        def handler(request):
+            calls.append(request.url.host)
+            if request.url.host == "mock.tsetmc.test":
+                return httpx.Response(503)
+            return httpx.Response(200, json={"marketwatch": [
+                {"lVal18AFC": "نماد", "insCode": "12345678"}
+            ]})
+        provider = FakeProvider()
+        provider.base_urls = ("https://mock.tsetmc.test/api", "https://mirror.tsetmc.test/api")
+        scanner = TsetmcMarketScanner(provider=provider,
+                                      transport=httpx.MockTransport(handler))
+        symbols, issues = await scanner._universe()
+        assert calls == ["mock.tsetmc.test", "mirror.tsetmc.test"]
+        assert symbols == [{"symbol": "نماد", "instrument_id": "12345678"}]
+        assert issues == []
+    asyncio.run(run())
+
+
 def test_market_watch_rejects_non_json_response():
     async def run():
         scanner = TsetmcMarketScanner(
