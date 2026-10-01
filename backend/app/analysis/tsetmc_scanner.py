@@ -104,7 +104,9 @@ class TsetmcMarketScanner:
             elif rejection:
                 rejected.append(rejection)
         accepted.sort(key=lambda x: (-x["score"], x["symbol"]))
-        partial = len(selected) < len(universe)
+        # Unresolved source rows mean the discovered universe may be incomplete.
+        # Never label coverage complete when the source payload had omissions.
+        partial = len(selected) < len(universe) or bool(universe_issues)
         status = "PARTIAL_SCAN" if partial else ("SCAN_COMPLETED" if accepted else "NO_QUALITY_PASSING_CANDIDATES")
         return {"status": status, "coverage": {"universe_count": len(universe), "selected_count": len(selected),
                 "scanned_count": len(results), "coverage_fraction": round(len(results) / len(universe), 4) if universe else 0.0,
