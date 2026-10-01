@@ -235,3 +235,66 @@ def test_scanner_passes_market_watch_inscode_to_provider_and_keeps_it_in_result(
         assert result["candidates"][0]["score_is_signal"] is False
 
     asyncio.run(run())
+
+
+def test_end_to_end_market_watch_to_history_to_analysis_uses_inscode():
+    from datetime import date, datetime, timedelta
+    from zoneinfo import ZoneInfo
+    from urllib.parse import unquote
+    from backend.app.data.tsetmc_equity import TsetmcEquityMarketDataProvider
+
+    tehran = ZoneInfo("Asia/Tehran")
+    now = datetime(2025, 1, 3, 12, 0, tzinfo=tehran).timestamp()
+    end = date(2025, 1, 2)
+    history = []
+    for index in range(220):
+        day = end - timedelta(days=index)
+        close = 100.0 + index
+        history.append({
+            "dEven": int(day.strftime("%Y%m%d")),
+            "priceFirst": close - 0.2,
+            "priceMax": close + 0.5,
+            "priceMin": close - 0.5,
+            "pClosing": close,
+            "qTotTran5J": 1000,
+        })
+    history.insert(0, {
+        "dEven": 20250103, "priceFirst": 1000, "priceMax": 1010,
+        "priceMin": 990, "pClosing": 1005, "qTotTran5J": 500,
+    })
+    requested = []
+
+    def handler(request):
+        path = unquote(request.url.path)
+        requested.append(path)
+        if path.endswith("/ClosingPrice/GetMarketWatch"):
+            return httpx.Response(200, json={"marketwatch": [
+                {"lVal18AFC": "فملی", "insCode": "12345678901234567"}
+            ]})
+        if path.endswith("/ClosingPrice/GetClosingPriceDailyList/12345678901234567/500"):
+            return httpx.Response(200, json={"closingPriceDaily": history})
+        raise AssertionError(f"Unexpected URL: {request.url}")
+
+    transport = httpx.MockTransport(handler)
+    provider = TsetmcEquityMarketDataProvider(
+        base_url="https://mock.tsetmc.test/api",
+        fallback_base_urls=(),
+        transport=transport,
+        clock=lambda: now,
+    )
+    scanner = TsetmcMarketScanner(provider=provider, transport=transport)
+    result = asyncio.run(scanner.scan(horizon="1w", limit=1, concurrency=1))
+
+    assert requested == [
+        "/api/ClosingPrice/GetMarketWatch",
+        "/api/ClosingPrice/GetClosingPriceDailyList/12345678901234567/500",
+    ]
+    assert result["status"] == "SCAN_COMPLETED"
+    assert result["coverage"]["is_complete"] is True
+    assert result["scanned_count"] == result["candidate_count"] == 1
+    candidate = result["candidates"][0]
+    assert candidate["symbol"] == "فملی"
+    assert candidate["instrument_id"] == "12345678901234567"
+    assert candidate["data_as_of"] == datetime(2025, 1, 2, 12, 0, tzinfo=tehran).timestamp()
+    assert candidate["decision"] == "NO_TRADE"
+    assert candidate["score_is_signal"] is False
