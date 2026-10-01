@@ -74,9 +74,9 @@ def test_market_watch_parses_realistic_payload_and_keeps_instrument_id():
         scanner = TsetmcMarketScanner(provider=FakeProvider(),
                                       transport=httpx.MockTransport(handler))
         symbols, issues = await scanner._universe()
-        assert symbols == [{"symbol": "نماد", "instrument_id": "12345678"},
-                           {"symbol": "نماد۲", "instrument_id": "87654321"}]
-        assert issues == ["market_watch_unresolved_rows:2"]
+        assert symbols == [{"symbol": "نماد۲", "instrument_id": "87654321"}]
+        assert issues == ["market_watch_unresolved_rows:2",
+                          "market_watch_duplicate_symbols_excluded:1"]
     asyncio.run(run())
 
 
@@ -163,4 +163,35 @@ def test_scanner_does_not_claim_complete_coverage_when_universe_has_unresolved_r
         assert result["coverage"]["coverage_fraction"] == 1.0
         assert result["coverage"]["is_complete"] is False
         assert result["universe_issues"] == ["market_watch_unresolved_rows:1"]
+    asyncio.run(run())
+
+
+def test_market_watch_excludes_all_rows_for_normalized_duplicate_symbols():
+    async def run():
+        def handler(request):
+            return httpx.Response(200, json={"marketwatch": [
+                {"lVal18AFC": "يک", "insCode": "111"},
+                {"lVal18AFC": "یک", "insCode": "222"},
+                {"lVal18AFC": "سالم", "insCode": "333"},
+            ]})
+        scanner = TsetmcMarketScanner(provider=FakeProvider(),
+                                      transport=httpx.MockTransport(handler))
+        symbols, issues = await scanner._universe()
+        assert symbols == [{"symbol": "سالم", "instrument_id": "333"}]
+        assert issues == ["market_watch_duplicate_symbols_excluded:1"]
+    asyncio.run(run())
+
+
+def test_duplicate_universe_issue_forces_partial_scan_even_at_full_coverage():
+    async def run():
+        scanner = TsetmcMarketScanner(provider=FakeProvider())
+        async def universe():
+            return ([{"symbol": "سالم"}],
+                    ["market_watch_duplicate_symbols_excluded:1"])
+        scanner._universe = universe
+        result = await scanner.scan(limit=1)
+        assert result["coverage"]["coverage_fraction"] == 1.0
+        assert result["coverage"]["is_complete"] is False
+        assert result["status"] == "PARTIAL_SCAN"
+        assert result["universe_issues"] == ["market_watch_duplicate_symbols_excluded:1"]
     asyncio.run(run())
