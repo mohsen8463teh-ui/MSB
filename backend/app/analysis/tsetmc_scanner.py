@@ -47,6 +47,25 @@ class TsetmcMarketScanner:
                     candidate_rows = payload.get("Items") if isinstance(payload, dict) else None
                 if not isinstance(candidate_rows, list) or not candidate_rows:
                     raise ValueError("invalid_tsetmc_market_watch_payload")
+                # A successful HTTP response and a non-empty list are not enough:
+                # some TSETMC-compatible hosts return rows with a different schema.
+                # Only accept a source if at least one row has a usable symbol field;
+                # otherwise continue to the next configured source (including WebGW).
+                symbol_keys = (
+                    ("instrumentName", "name", "ticker")
+                    if expected_format == "items"
+                    else ("lVal18AFC", "symbol", "ticker", "lVal30")
+                )
+                has_resolvable_symbol = any(
+                    isinstance(row, dict)
+                    and any(
+                        isinstance(row.get(key), str) and row.get(key).strip()
+                        for key in symbol_keys
+                    )
+                    for row in candidate_rows
+                )
+                if not has_resolvable_symbol:
+                    raise ValueError("unresolvable_tsetmc_market_watch_rows")
                 rows = candidate_rows
                 rows_format = expected_format
                 break
