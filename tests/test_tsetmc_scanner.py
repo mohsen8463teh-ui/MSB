@@ -195,3 +195,43 @@ def test_duplicate_universe_issue_forces_partial_scan_even_at_full_coverage():
         assert result["status"] == "PARTIAL_SCAN"
         assert result["universe_issues"] == ["market_watch_duplicate_symbols_excluded:1"]
     asyncio.run(run())
+
+
+def test_scanner_passes_market_watch_inscode_to_provider_and_keeps_it_in_result():
+    async def run():
+        class InstrumentIdProvider(FakeProvider):
+            def __init__(self):
+                self.calls = []
+
+            async def get_market_data_by_instrument_id(self, market, instrument_id, symbol, horizon):
+                self.calls.append((market, instrument_id, symbol, horizon))
+                data = candles()
+                return MarketDataResult(
+                    True, True, True,
+                    {"candles": data, "as_of": data[-1]["timestamp"]},
+                    self.name, [],
+                )
+
+        provider = InstrumentIdProvider()
+
+        def handler(request):
+            return httpx.Response(200, json={"marketwatch": [
+                {"lVal18AFC": "فملی", "insCode": "12345678901234567"}
+            ]})
+
+        scanner = TsetmcMarketScanner(
+            provider=provider,
+            transport=httpx.MockTransport(handler),
+        )
+        result = await scanner.scan(horizon="1w", limit=1, concurrency=1)
+
+        assert provider.calls == [
+            ("iran_equity", "12345678901234567", "فملی", "1w")
+        ]
+        assert result["scanned_count"] == 1
+        assert result["candidate_count"] == 1
+        assert result["candidates"][0]["instrument_id"] == "12345678901234567"
+        assert result["candidates"][0]["decision"] == "NO_TRADE"
+        assert result["candidates"][0]["score_is_signal"] is False
+
+    asyncio.run(run())
