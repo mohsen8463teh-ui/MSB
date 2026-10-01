@@ -299,6 +299,7 @@ def test_tsetmc_provider_rejects_malformed_search_payload(search_json, expected_
     [
         ([], "invalid_daily_history_payload"),
         ({"closingPriceDaily": {}}, "invalid_daily_history_payload"),
+        ({"closingPriceDaily": []}, "empty_daily_history"),
         ({"closingPriceDaily": [None]}, "malformed_daily_history_row"),
         ({"closingPriceDaily": [{"dEven": "not-a-date"}]}, "invalid_daily_history_date"),
     ],
@@ -505,3 +506,36 @@ def test_tsetmc_provider_fails_closed_when_inconsistent_ohlc_rows_exceed_toleran
 
     assert result.available is False
     assert result.issues == ["too_many_inconsistent_daily_rows"]
+
+
+def test_tsetmc_provider_retries_all_history_when_500_rows_are_empty():
+    seen_paths = []
+
+    def handler(request):
+        path = unquote(request.url.path)
+        seen_paths.append(path)
+        if "Instrument/GetInstrumentSearch" in path:
+            return httpx.Response(200, json={"instrumentSearch": [
+                {"insCode": "12345678901234567", "lVal18AFC": "فملی"}
+            ]})
+        if path.endswith("/ClosingPrice/GetClosingPriceDailyList/12345678901234567/500"):
+            return httpx.Response(200, json={"closingPriceDaily": []})
+        if path.endswith("/ClosingPrice/GetClosingPriceDailyList/12345678901234567/0"):
+            return httpx.Response(200, json={"closingPriceDaily": history_rows()})
+        raise AssertionError(f"Unexpected URL: {request.url}")
+
+    provider = TsetmcEquityMarketDataProvider(
+        transport=httpx.MockTransport(handler),
+        clock=lambda: NOW,
+        fallback_base_urls=(),
+    )
+    result = asyncio.run(provider.get_market_data("iran_equity", "فملی", "1d"))
+
+    assert result.available is True
+    assert result.complete is True
+    assert len(result.data["candles"]) == 220
+    assert seen_paths == [
+        "/api/Instrument/GetInstrumentSearch/فملی",
+        "/api/ClosingPrice/GetClosingPriceDailyList/12345678901234567/500",
+        "/api/ClosingPrice/GetClosingPriceDailyList/12345678901234567/0",
+    ]
