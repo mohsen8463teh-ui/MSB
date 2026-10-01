@@ -156,16 +156,25 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                         candidate_id = str(exact[0].get("insCode", ""))
                         if not re.fullmatch(r"\d{8,20}", candidate_id):
                             return self._unavailable("invalid_instrument_identifier")
-                    history_response = await client.get(
-                        f"/ClosingPrice/GetClosingPriceDailyList/{candidate_id}/500"
-                    )
-                    history_response.raise_for_status()
-                    candidate_history = history_response.json()
-                    if not isinstance(candidate_history, dict):
-                        last_payload_error = ValueError("invalid daily history payload")
-                        continue
-                    if not isinstance(candidate_history.get("closingPriceDaily"), list):
-                        last_payload_error = ValueError("invalid daily history payload")
+                    candidate_history = None
+                    for top in (500, 0):
+                        history_response = await client.get(
+                            f"/ClosingPrice/GetClosingPriceDailyList/{candidate_id}/{top}"
+                        )
+                        history_response.raise_for_status()
+                        payload = history_response.json()
+                        if not isinstance(payload, dict) or not isinstance(payload.get("closingPriceDaily"), list):
+                            last_payload_error = ValueError("invalid daily history payload")
+                            break
+                        if not payload["closingPriceDaily"]:
+                            # An HTTP 200 with an empty 500-row response is not proof
+                            # that the instrument has no history. Retry once using
+                            # TSETMC's documented 0=all-history form before failing over.
+                            last_payload_error = ValueError("empty daily history payload")
+                            continue
+                        candidate_history = payload
+                        break
+                    if candidate_history is None:
                         continue
                     search_payload = candidate_search
                     history_payload = candidate_history
@@ -191,6 +200,7 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                 payload_issue = {
                     "invalid instrument search payload": "invalid_instrument_search_payload",
                     "invalid daily history payload": "invalid_daily_history_payload",
+                    "empty daily history payload": "empty_daily_history",
                 }.get(str(last_payload_error), "invalid_tsetmc_json_payload")
                 return self._unavailable(payload_issue)
             return self._unavailable("tsetmc_all_hosts_unavailable")
