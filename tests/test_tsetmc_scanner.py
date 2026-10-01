@@ -81,6 +81,29 @@ def test_market_watch_parses_realistic_payload_and_keeps_instrument_id():
 
 
 @pytest.mark.parametrize("payload", [[], {"marketwatch": {}}, {"wrong": []}])
+
+def test_market_watch_falls_back_to_webgw_items_payload():
+    async def run():
+        calls = []
+        def handler(request):
+            calls.append(request.url.host)
+            if request.url.host == "mock.tsetmc.test":
+                return httpx.Response(200, json={"unexpected": []})
+            assert request.url.path.endswith("/MarketWatchCash/fa")
+            return httpx.Response(200, json={"Items": [
+                {"instrumentId": "IRO1EXAMPLE0001", "instrumentName": "فملی"},
+                {"instrumentId": "IRO1EXAMPLE0002", "instrumentName": "فولاد"},
+            ]})
+        scanner = TsetmcMarketScanner(provider=FakeProvider(),
+                                      transport=httpx.MockTransport(handler))
+        symbols, issues = await scanner._universe()
+        assert symbols == [{"symbol": "فملی", "instrument_id": None},
+                           {"symbol": "فولاد", "instrument_id": None}]
+        assert issues == []
+        assert calls == ["mock.tsetmc.test", "webgw.tse.ir"]
+    asyncio.run(run())
+
+
 def test_market_watch_rejects_invalid_payload(payload):
     async def run():
         scanner = TsetmcMarketScanner(
