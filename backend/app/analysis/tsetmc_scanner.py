@@ -75,8 +75,9 @@ class TsetmcMarketScanner:
             if last_error is not None:
                 raise last_error
             raise ValueError("invalid_tsetmc_market_watch_payload")
-        symbols, seen, issues = [], set(), []
+        by_symbol, issues = {}, []
         malformed = 0
+        duplicate_symbols = set()
         for row in rows:
             if not isinstance(row, dict):
                 malformed += 1
@@ -87,16 +88,23 @@ class TsetmcMarketScanner:
                 malformed += 1
                 continue
             key = symbol.replace("ي", "ی").replace("ك", "ک").strip()
-            if key in seen:
-                continue
-            seen.add(key)
-            # WebGW instrumentId is not the numeric TSETMC insCode expected by
-            # get_market_data_by_instrument_id; leave it unset for exact lookup.
+            # Never silently choose one instrument when the market watch contains
+            # the same normalized symbol more than once. Exact-symbol history
+            # lookup would otherwise be ambiguous and could attach wrong candles.
             raw_id = row.get("insCode") if rows_format == "marketwatch" else None
             instrument_id = str(raw_id) if raw_id is not None and str(raw_id).isdigit() else None
-            symbols.append({"symbol": key, "instrument_id": instrument_id})
+            item = {"symbol": key, "instrument_id": instrument_id}
+            if key in by_symbol:
+                duplicate_symbols.add(key)
+            else:
+                by_symbol[key] = item
+        for key in duplicate_symbols:
+            by_symbol.pop(key, None)
+        symbols = list(by_symbol.values())
         if malformed:
             issues.append(f"market_watch_unresolved_rows:{malformed}")
+        if duplicate_symbols:
+            issues.append(f"market_watch_duplicate_symbols_excluded:{len(duplicate_symbols)}")
         if not symbols:
             raise ValueError("market_watch_contained_no_resolvable_symbols")
         return symbols, issues
