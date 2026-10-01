@@ -80,8 +80,6 @@ def test_market_watch_parses_realistic_payload_and_keeps_instrument_id():
     asyncio.run(run())
 
 
-@pytest.mark.parametrize("payload", [[], {"marketwatch": {}}, {"wrong": []}])
-
 def test_market_watch_falls_back_to_webgw_items_payload():
     async def run():
         calls = []
@@ -104,6 +102,7 @@ def test_market_watch_falls_back_to_webgw_items_payload():
     asyncio.run(run())
 
 
+@pytest.mark.parametrize("payload", [[], {"marketwatch": {}}, {"wrong": []}])
 def test_market_watch_rejects_invalid_payload(payload):
     async def run():
         scanner = TsetmcMarketScanner(
