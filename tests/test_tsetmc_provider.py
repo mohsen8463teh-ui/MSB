@@ -539,3 +539,45 @@ def test_tsetmc_provider_retries_all_history_when_500_rows_are_empty():
         "/api/ClosingPrice/GetClosingPriceDailyList/12345678901234567/500",
         "/api/ClosingPrice/GetClosingPriceDailyList/12345678901234567/0",
     ]
+
+
+
+def test_tsetmc_provider_uses_market_watch_instrument_id_without_symbol_search():
+    requested = []
+
+    def handler(request):
+        path = unquote(request.url.path)
+        requested.append(path)
+        if path.endswith("/ClosingPrice/GetClosingPriceDailyList/98765432101234567/500"):
+            return httpx.Response(200, json={"closingPriceDaily": history_rows()})
+        raise AssertionError(f"Unexpected URL: {request.url}")
+
+    provider = TsetmcEquityMarketDataProvider(
+        transport=httpx.MockTransport(handler),
+        clock=lambda: NOW,
+        fallback_base_urls=(),
+    )
+    result = asyncio.run(
+        provider.get_market_data_by_instrument_id(
+            "iran_equity", "98765432101234567", "فملی", "1w"
+        )
+    )
+
+    assert result.available is True
+    assert result.data["instrument_id"] == "98765432101234567"
+    assert result.data["symbol"] == "فملی"
+    assert requested == [
+        "/api/ClosingPrice/GetClosingPriceDailyList/98765432101234567/500"
+    ]
+
+
+@pytest.mark.parametrize("bad_id", [None, "", "123", "12345678x", "123456789012345678901", 12345678901234567])
+def test_tsetmc_provider_rejects_invalid_market_watch_instrument_id(bad_id):
+    provider = TsetmcEquityMarketDataProvider(clock=lambda: NOW)
+    result = asyncio.run(
+        provider.get_market_data_by_instrument_id(
+            "iran_equity", bad_id, "فملی", "1w"
+        )
+    )
+    assert result.available is False
+    assert result.issues == ["invalid_instrument_identifier"]
