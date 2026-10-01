@@ -27,25 +27,32 @@ class TsetmcMarketScanner:
         path = "/ClosingPrice/GetMarketWatch?market=0&industrialGroup=&paperTypes%5B0%5D=1&paperTypes%5B1%5D=2&paperTypes%5B2%5D=3&paperTypes%5B3%5D=4&paperTypes%5B4%5D=5&paperTypes%5B5%5D=6&paperTypes%5B6%5D=7&paperTypes%5B7%5D=8&paperTypes%5B8%5D=9&showTraded=false&withBestLimits=false&hEven=0&RefID=0"
         last_error = None
         rows = None
-        for host in self.provider.base_urls:
+        rows_format = None
+        sources = [(host + path, "marketwatch") for host in self.provider.base_urls]
+        # The locally verified WebGW endpoint uses an Items envelope and ISIN-like
+        # instrumentId values, not TSETMC insCode. Resolve those rows by exact symbol.
+        sources.append(("https://webgw.tse.ir/InstrumentProvider/api/v1/MarketWatch/MarketWatchCash/fa", "items"))
+        for url, expected_format in sources:
             try:
                 async with httpx.AsyncClient(timeout=self.timeout_seconds, headers=headers, follow_redirects=True, transport=self.transport) as client:
-                    response = await client.get(host + path)
+                    response = await client.get(url)
                     response.raise_for_status()
                     try:
                         payload = response.json()
                     except ValueError as exc:
                         raise ValueError("invalid_tsetmc_market_watch_json") from exc
-                candidate_rows = payload.get("marketwatch") if isinstance(payload, dict) else None
+                if expected_format == "marketwatch":
+                    candidate_rows = payload.get("marketwatch") if isinstance(payload, dict) else None
+                else:
+                    candidate_rows = payload.get("Items") if isinstance(payload, dict) else None
                 if not isinstance(candidate_rows, list) or not candidate_rows:
                     raise ValueError("invalid_tsetmc_market_watch_payload")
                 rows = candidate_rows
+                rows_format = expected_format
                 break
             except (httpx.HTTPError, ValueError) as exc:
                 last_error = exc
         if rows is None:
-            if isinstance(last_error, ValueError):
-                raise last_error
             if last_error is not None:
                 raise last_error
             raise ValueError("invalid_tsetmc_market_watch_payload")
@@ -55,7 +62,8 @@ class TsetmcMarketScanner:
             if not isinstance(row, dict):
                 malformed += 1
                 continue
-            symbol = next((row.get(k) for k in ("lVal18AFC", "symbol", "ticker", "lVal30") if isinstance(row.get(k), str) and row.get(k).strip()), None)
+            keys = ("instrumentName", "name", "ticker") if rows_format == "items" else ("lVal18AFC", "symbol", "ticker", "lVal30")
+            symbol = next((row.get(k) for k in keys if isinstance(row.get(k), str) and row.get(k).strip()), None)
             if not symbol:
                 malformed += 1
                 continue
@@ -63,7 +71,9 @@ class TsetmcMarketScanner:
             if key in seen:
                 continue
             seen.add(key)
-            raw_id = row.get("insCode")
+            # WebGW instrumentId is not the numeric TSETMC insCode expected by
+            # get_market_data_by_instrument_id; leave it unset for exact lookup.
+            raw_id = row.get("insCode") if rows_format == "marketwatch" else None
             instrument_id = str(raw_id) if raw_id is not None and str(raw_id).isdigit() else None
             symbols.append({"symbol": key, "instrument_id": instrument_id})
         if malformed:
