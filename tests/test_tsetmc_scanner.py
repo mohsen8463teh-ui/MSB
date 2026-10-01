@@ -54,7 +54,8 @@ def test_scanner_reports_rejected_symbols_and_error_details():
             return ([{"symbol": "خراب"}], [])
         scanner._universe = universe
         result = await scanner.scan(limit=1)
-        assert result["status"] == "SCAN_COMPLETED"
+        assert result["status"] == "NO_QUALITY_PASSING_CANDIDATES"
+        assert result["scanned_count"] == 1
         assert result["rejected"][0]["issues"] == ["not_fresh"]
     asyncio.run(run())
 
