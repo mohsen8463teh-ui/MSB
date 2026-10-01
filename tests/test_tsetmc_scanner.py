@@ -107,3 +107,17 @@ def test_scanner_rejects_invalid_limits():
         with pytest.raises(ValueError):
             await scanner.scan(limit=0)
     asyncio.run(run())
+
+
+def test_scanner_does_not_claim_complete_coverage_when_universe_has_unresolved_rows():
+    async def run():
+        scanner = TsetmcMarketScanner(provider=FakeProvider())
+        async def universe():
+            return ([{"symbol": "نماد"}], ["market_watch_unresolved_rows:1"])
+        scanner._universe = universe
+        result = await scanner.scan(limit=1)
+        assert result["status"] == "PARTIAL_SCAN"
+        assert result["coverage"]["coverage_fraction"] == 1.0
+        assert result["coverage"]["is_complete"] is False
+        assert result["universe_issues"] == ["market_watch_unresolved_rows:1"]
+    asyncio.run(run())
