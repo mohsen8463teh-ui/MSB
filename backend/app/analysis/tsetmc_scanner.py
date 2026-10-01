@@ -24,16 +24,30 @@ class TsetmcMarketScanner:
             "Referer": "https://www.tsetmc.com/",
             "Origin": "https://www.tsetmc.com",
         }
-        url = self.provider.base_urls[0] + "/ClosingPrice/GetMarketWatch?market=0&industrialGroup=&paperTypes%5B0%5D=1&paperTypes%5B1%5D=2&paperTypes%5B2%5D=3&paperTypes%5B3%5D=4&paperTypes%5B4%5D=5&paperTypes%5B5%5D=6&paperTypes%5B6%5D=7&paperTypes%5B7%5D=8&paperTypes%5B8%5D=9&showTraded=false&withBestLimits=false&hEven=0&RefID=0"
-        async with httpx.AsyncClient(timeout=self.timeout_seconds, headers=headers, follow_redirects=True, transport=self.transport) as client:
-            response = await client.get(url)
-            response.raise_for_status()
+        path = "/ClosingPrice/GetMarketWatch?market=0&industrialGroup=&paperTypes%5B0%5D=1&paperTypes%5B1%5D=2&paperTypes%5B2%5D=3&paperTypes%5B3%5D=4&paperTypes%5B4%5D=5&paperTypes%5B5%5D=6&paperTypes%5B6%5D=7&paperTypes%5B7%5D=8&paperTypes%5B8%5D=9&showTraded=false&withBestLimits=false&hEven=0&RefID=0"
+        last_error = None
+        rows = None
+        for host in self.provider.base_urls:
             try:
-                payload = response.json()
-            except ValueError as exc:
-                raise ValueError("invalid_tsetmc_market_watch_json") from exc
-        rows = payload.get("marketwatch") if isinstance(payload, dict) else None
-        if not isinstance(rows, list):
+                async with httpx.AsyncClient(timeout=self.timeout_seconds, headers=headers, follow_redirects=True, transport=self.transport) as client:
+                    response = await client.get(host + path)
+                    response.raise_for_status()
+                    try:
+                        payload = response.json()
+                    except ValueError as exc:
+                        raise ValueError("invalid_tsetmc_market_watch_json") from exc
+                candidate_rows = payload.get("marketwatch") if isinstance(payload, dict) else None
+                if not isinstance(candidate_rows, list) or not candidate_rows:
+                    raise ValueError("invalid_tsetmc_market_watch_payload")
+                rows = candidate_rows
+                break
+            except (httpx.HTTPError, ValueError) as exc:
+                last_error = exc
+        if rows is None:
+            if isinstance(last_error, ValueError):
+                raise last_error
+            if last_error is not None:
+                raise last_error
             raise ValueError("invalid_tsetmc_market_watch_payload")
         symbols, seen, issues = [], set(), []
         malformed = 0
