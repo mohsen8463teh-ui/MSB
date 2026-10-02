@@ -330,3 +330,28 @@ def test_end_to_end_market_watch_to_history_to_analysis_uses_inscode():
     assert candidate["data_as_of"] == datetime(2025, 1, 2, 12, 0, tzinfo=tehran).timestamp()
     assert candidate["decision"] == "NO_TRADE"
     assert candidate["score_is_signal"] is False
+
+
+def test_scanner_offset_inspects_later_source_order_slice_and_marks_partial():
+    async def run():
+        scanner = TsetmcMarketScanner(provider=FakeProvider())
+        async def universe():
+            return ([{"symbol": f"نماد{i}"} for i in range(6)], [])
+        scanner._universe = universe
+        result = await scanner.scan(limit=2, offset=3, concurrency=1)
+        assert [item["symbol"] for item in result["candidates"]] == ["نماد3", "نماد4"]
+        assert result["coverage"]["offset"] == 3
+        assert result["coverage"]["universe_count"] == 6
+        assert result["coverage"]["selected_count"] == 2
+        assert result["coverage"]["scanned_count"] == 2
+        assert result["coverage"]["is_complete"] is False
+        assert result["status"] == "PARTIAL_SCAN"
+    asyncio.run(run())
+
+
+def test_scanner_rejects_negative_offset():
+    async def run():
+        scanner = TsetmcMarketScanner(provider=FakeProvider())
+        with pytest.raises(ValueError, match="offset_must_be_a_non_negative_integer"):
+            await scanner.scan(offset=-1)
+    asyncio.run(run())
