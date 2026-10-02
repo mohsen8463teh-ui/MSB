@@ -39,8 +39,8 @@ def test_scanner_marks_limited_universe_as_partial():
         result = await scanner.scan(limit=2, concurrency=2)
         assert result["status"] == "PARTIAL_SCAN"
         assert result["coverage"] == {"universe_count": 3, "selected_count": 2,
-                                      "scanned_count": 2, "coverage_fraction": 0.6667,
-                                      "is_complete": False}
+                                      "offset": 0, "scanned_count": 2,
+                                      "coverage_fraction": 0.6667, "is_complete": False}
         assert result["candidate_count"] == 2
         assert all(x["decision"] == "NO_TRADE" and x["score_is_signal"] is False
                    for x in result["candidates"])
