@@ -156,7 +156,11 @@ def test_scanner_aggregates_data_quality_rejection_reasons():
     async def run():
         class RejectedProvider(FakeProvider):
             async def get_market_data(self, market, symbol, horizon):
-                return MarketDataResult(False, False, False, {}, self.name,
+                return MarketDataResult(False, False, False,
+                    {"quality": {"traded_rows": 220, "accepted_rows": 209,
+                                 "excluded_inconsistent_ohlc_rows": 11,
+                                 "allowed_inconsistent_ohlc_rows": 1,
+                                 "excluded_no_trade_rows": 0}}, self.name,
                     ["too_many_inconsistent_daily_rows:excluded=11:traded_rows=220:allowed=1"])
 
         scanner = TsetmcMarketScanner(provider=RejectedProvider())
@@ -165,6 +169,7 @@ def test_scanner_aggregates_data_quality_rejection_reasons():
         scanner._universe = universe
         result = await scanner.scan(limit=2, concurrency=1)
         assert result["candidate_count"] == 0
+        assert result["rejected"][0]["data_quality"]["excluded_inconsistent_ohlc_rows"] == 11
         assert result["rejection_issue_counts"] == {
             "too_many_inconsistent_daily_rows:excluded=11:traded_rows=220:allowed=1": 2
         }
