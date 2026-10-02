@@ -109,13 +109,15 @@ class TsetmcMarketScanner:
             raise ValueError("market_watch_contained_no_resolvable_symbols")
         return symbols, issues
 
-    async def scan(self, *, horizon: str = "1w", limit: int = 120, concurrency: int = 4) -> dict[str, Any]:
+    async def scan(self, *, horizon: str = "1w", limit: int = 120, concurrency: int = 4, offset: int = 0) -> dict[str, Any]:
         if horizon not in {"1d", "3d", "1w", "1m", "3m", "5m", "6m", "1y"}:
             raise ValueError("unsupported_horizon")
         if isinstance(limit, bool) or not 1 <= limit <= 6000:
             raise ValueError("limit_must_be_between_1_and_6000")
         if isinstance(concurrency, bool) or not 1 <= concurrency <= 12:
             raise ValueError("concurrency_must_be_between_1_and_12")
+        if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+            raise ValueError("offset_must_be_a_non_negative_integer")
         universe, universe_issues = await self._universe()
         semaphore = asyncio.Semaphore(concurrency)
         accepted, rejected = [], []
@@ -150,7 +152,7 @@ class TsetmcMarketScanner:
                 except Exception as exc:
                     return None, {"symbol": symbol, "issues": ["scan_error"], "error_type": type(exc).__name__, "error": str(exc)[:240]}
 
-        selected = universe[:limit]
+        selected = universe[offset:offset + limit]
         results = await asyncio.gather(*(inspect(item) for item in selected))
         for candidate, rejection in results:
             if candidate:
@@ -160,7 +162,7 @@ class TsetmcMarketScanner:
         accepted.sort(key=lambda x: (-x["score"], x["symbol"]))
         # Unresolved source rows mean the discovered universe may be incomplete.
         # Never label coverage complete when the source payload had omissions.
-        partial = len(selected) < len(universe) or bool(universe_issues)
+        partial = offset != 0 or offset + len(selected) < len(universe) or bool(universe_issues)
         status = "PARTIAL_SCAN" if partial else ("SCAN_COMPLETED" if accepted else "NO_QUALITY_PASSING_CANDIDATES")
         rejection_issue_counts = {}
         quality_summary = {
@@ -186,7 +188,7 @@ class TsetmcMarketScanner:
                     value = quality.get(field)
                     if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
                         quality_summary[field] += value
-        return {"status": status, "coverage": {"universe_count": len(universe), "selected_count": len(selected),
+        return {"status": status, "coverage": {"universe_count": len(universe), "selected_count": len(selected), "offset": offset,
                 "scanned_count": len(results), "coverage_fraction": round(len(results) / len(universe), 4) if universe else 0.0,
                 "is_complete": not partial},
                 "market": "iran_equity", "horizon": horizon, "universe_count": len(universe),
