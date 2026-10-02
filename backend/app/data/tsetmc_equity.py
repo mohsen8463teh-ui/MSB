@@ -252,6 +252,8 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                         "high": candle["high"],
                         "low": candle["low"],
                         "close": candle["close"],
+                        "last_trade": row.get("pDrCotVal"),
+                        "previous_close": row.get("priceYesterday"),
                         "volume": candle["volume"],
                         "issue": "inconsistent_ohlc",
                     })
