@@ -132,7 +132,10 @@ class TsetmcMarketScanner:
                     else:
                         data = await self.provider.get_market_data("iran_equity", symbol, horizon)
                     if not (data.available and data.fresh and data.complete):
-                        return None, {"symbol": symbol, "issues": data.issues or ["data_quality_gate_failed"]}
+                        rejection = {"symbol": symbol, "issues": data.issues or ["data_quality_gate_failed"]}
+                        if isinstance(data.data, dict) and isinstance(data.data.get("quality"), dict):
+                            rejection["data_quality"] = data.data["quality"]
+                        return None, rejection
                     indicators = calculate_indicators(data.data.get("candles", []))
                     components = {
                         "trend": int(indicators["price_above_sma20"]) + int(indicators["price_above_sma50"]) + int(indicators["price_above_sma200"]),
