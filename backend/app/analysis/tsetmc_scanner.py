@@ -159,11 +159,15 @@ class TsetmcMarketScanner:
         # Never label coverage complete when the source payload had omissions.
         partial = len(selected) < len(universe) or bool(universe_issues)
         status = "PARTIAL_SCAN" if partial else ("SCAN_COMPLETED" if accepted else "NO_QUALITY_PASSING_CANDIDATES")
+        rejection_issue_counts = {}
+        for item in rejected:
+            for issue in item.get("issues", []):
+                rejection_issue_counts[issue] = rejection_issue_counts.get(issue, 0) + 1
         return {"status": status, "coverage": {"universe_count": len(universe), "selected_count": len(selected),
                 "scanned_count": len(results), "coverage_fraction": round(len(results) / len(universe), 4) if universe else 0.0,
                 "is_complete": not partial},
                 "market": "iran_equity", "horizon": horizon, "universe_count": len(universe),
                 "selected_count": len(selected), "scanned_count": len(results),
-                "candidate_count": len(accepted), "candidates": accepted, "rejected": rejected,
+                "candidate_count": len(accepted), "candidates": accepted, "rejected": rejected, "rejection_issue_counts": dict(sorted(rejection_issue_counts.items())),
                 "universe_issues": universe_issues, "research_only": True,
                 "notice": "Ranking is descriptive only; no validated strategy is enabled and no order is authorized."}
