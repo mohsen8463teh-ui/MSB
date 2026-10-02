@@ -551,6 +551,8 @@ def test_tsetmc_provider_fails_closed_when_inconsistent_ohlc_rows_exceed_toleran
         "high": 1,
         "low": 99.5,
         "close": 100.0,
+        "last_trade": None,
+        "previous_close": None,
         "volume": 1000,
         "issue": "inconsistent_ohlc",
     }
