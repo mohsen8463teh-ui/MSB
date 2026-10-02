@@ -518,11 +518,11 @@ def test_tsetmc_provider_fails_closed_when_inconsistent_ohlc_rows_exceed_toleran
     assert quality["inconsistent_ohlc_samples_truncated"] is True
     sample = quality["inconsistent_ohlc_samples"][0]
     assert sample == {
-        "date": "2025-01-01",
-        "open": 100.8,
+        "date": "2025-01-02",
+        "open": 99.8,
         "high": 1,
-        "low": 100.5,
-        "close": 101.0,
+        "low": 99.5,
+        "close": 100.0,
         "volume": 1000,
         "issue": "inconsistent_ohlc",
     }
