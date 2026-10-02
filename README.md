@@ -63,9 +63,12 @@ python scripts/tsetmc_scan_diagnostic.py --limit 5 --horizon 1w
 ```
 
 The diagnostic is capped at 20 symbols and concurrency 2, defaults to 5 and 1,
-prints no candle history, and never submits orders. Its `quality_summary` and
-`rejected` fields help distinguish source-data problems from validation
-rejections. A partial scan is not evidence of complete market coverage.
+prints no candle history, and never submits orders. It inspects the first N
+resolvable symbols in source order; this is a connectivity/data-quality probe,
+not a representative market sample or a ranking of the full market. Its
+`quality_summary` and `rejected` fields help distinguish source-data problems
+from validation rejections. A partial scan is not evidence of complete market
+coverage.
 
 If the dashboard is hosted on a remote server instead, this local-only setup
 does not automatically connect that server to the phone. A secure relay or a
