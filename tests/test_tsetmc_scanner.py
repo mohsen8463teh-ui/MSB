@@ -152,6 +152,25 @@ def test_scanner_rejects_invalid_limits():
     asyncio.run(run())
 
 
+def test_scanner_aggregates_data_quality_rejection_reasons():
+    async def run():
+        class RejectedProvider(FakeProvider):
+            async def get_market_data(self, market, symbol, horizon):
+                return MarketDataResult(False, False, False, {}, self.name,
+                    ["too_many_inconsistent_daily_rows:excluded=11:traded_rows=220:allowed=1"])
+
+        scanner = TsetmcMarketScanner(provider=RejectedProvider())
+        async def universe():
+            return ([{"symbol": "نماد۱"}, {"symbol": "نماد۲"}], [])
+        scanner._universe = universe
+        result = await scanner.scan(limit=2, concurrency=1)
+        assert result["candidate_count"] == 0
+        assert result["rejection_issue_counts"] == {
+            "too_many_inconsistent_daily_rows:excluded=11:traded_rows=220:allowed=1": 2
+        }
+
+    asyncio.run(run())
+
 def test_scanner_does_not_claim_complete_coverage_when_universe_has_unresolved_rows():
     async def run():
         scanner = TsetmcMarketScanner(provider=FakeProvider())
