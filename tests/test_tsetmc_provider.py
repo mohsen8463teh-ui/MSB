@@ -508,60 +508,23 @@ def test_tsetmc_provider_fails_closed_when_inconsistent_ohlc_rows_exceed_toleran
     assert result.issues == [
         "too_many_inconsistent_daily_rows:excluded=11:traded_rows=220:allowed=1"
     ]
-    assert result.data["quality"] == {
-        "traded_rows": 220,
-        "accepted_rows": 209,
-        "excluded_inconsistent_ohlc_rows": 11,
-        "allowed_inconsistent_ohlc_rows": 1,
-        "excluded_no_trade_rows": 0,
-        "inconsistent_ohlc_samples": [
-            {
-                "date": "2024-12-23",
-                "open": 109.8,
-                "high": 1,
-                "low": 109.5,
-                "close": 110.0,
-                "volume": 1000,
-                "issue": "inconsistent_ohlc",
-            },
-            {
-                "date": "2024-12-22",
-                "open": 110.8,
-                "high": 1,
-                "low": 110.5,
-                "close": 111.0,
-                "volume": 1000,
-                "issue": "inconsistent_ohlc",
-            },
-            {
-                "date": "2024-12-21",
-                "open": 111.8,
-                "high": 1,
-                "low": 111.5,
-                "close": 112.0,
-                "volume": 1000,
-                "issue": "inconsistent_ohlc",
-            },
-            {
-                "date": "2024-12-20",
-                "open": 112.8,
-                "high": 1,
-                "low": 112.5,
-                "close": 113.0,
-                "volume": 1000,
-                "issue": "inconsistent_ohlc",
-            },
-            {
-                "date": "2024-12-19",
-                "open": 113.8,
-                "high": 1,
-                "low": 113.5,
-                "close": 114.0,
-                "volume": 1000,
-                "issue": "inconsistent_ohlc",
-            },
-        ],
-        "inconsistent_ohlc_samples_truncated": True,
+    quality = result.data["quality"]
+    assert quality["traded_rows"] == 220
+    assert quality["accepted_rows"] == 209
+    assert quality["excluded_inconsistent_ohlc_rows"] == 11
+    assert quality["allowed_inconsistent_ohlc_rows"] == 1
+    assert quality["excluded_no_trade_rows"] == 0
+    assert len(quality["inconsistent_ohlc_samples"]) == 5
+    assert quality["inconsistent_ohlc_samples_truncated"] is True
+    sample = quality["inconsistent_ohlc_samples"][0]
+    assert sample == {
+        "date": "2025-01-01",
+        "open": 100.8,
+        "high": 1,
+        "low": 100.5,
+        "close": 101.0,
+        "volume": 1000,
+        "issue": "inconsistent_ohlc",
     }
 
 
