@@ -63,4 +63,16 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print(json.dumps({"status": "INTERRUPTED", "notice": "Scan cancelled by user."}, ensure_ascii=False))
+        raise SystemExit(130)
+    except Exception as exc:
+        print(json.dumps({
+            "status": "SCAN_ERROR",
+            "error_type": type(exc).__name__,
+            "error": str(exc)[:240],
+            "notice": "No trading action was taken. Check network access and TSETMC availability.",
+        }, ensure_ascii=False, indent=2), file=sys.stderr)
+        raise SystemExit(2)
