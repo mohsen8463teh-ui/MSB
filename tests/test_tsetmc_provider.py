@@ -505,7 +505,9 @@ def test_tsetmc_provider_fails_closed_when_inconsistent_ohlc_rows_exceed_toleran
     result = asyncio.run(provider.get_market_data("iran_equity", "فملی", "1d"))
 
     assert result.available is False
-    assert result.issues == ["too_many_inconsistent_daily_rows"]
+    assert result.issues == [
+        "too_many_inconsistent_daily_rows:excluded=11:traded_rows=220:allowed=1"
+    ]
 
 
 def test_tsetmc_provider_retries_all_history_when_500_rows_are_empty():
