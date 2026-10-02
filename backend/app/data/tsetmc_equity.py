@@ -208,6 +208,7 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
         candles = []
         excluded_no_trade_rows = 0
         excluded_inconsistent_ohlc_rows = 0
+        inconsistent_ohlc_samples = []
         for row in rows:
             if not isinstance(row, dict):
                 return self._unavailable("malformed_daily_history_row")
@@ -244,6 +245,16 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
             row_check = validate_ohlcv([candle], now=now)
             if row_check["issues"] == ["candle_0_inconsistent_ohlc"]:
                 excluded_inconsistent_ohlc_rows += 1
+                if len(inconsistent_ohlc_samples) < 5:
+                    inconsistent_ohlc_samples.append({
+                        "date": trading_date.isoformat(),
+                        "open": candle["open"],
+                        "high": candle["high"],
+                        "low": candle["low"],
+                        "close": candle["close"],
+                        "volume": candle["volume"],
+                        "issue": "inconsistent_ohlc",
+                    })
                 continue
             candles.append(candle)
 
@@ -264,6 +275,8 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                     "excluded_inconsistent_ohlc_rows": excluded_inconsistent_ohlc_rows,
                     "allowed_inconsistent_ohlc_rows": tolerated_bad_rows,
                     "excluded_no_trade_rows": excluded_no_trade_rows,
+                    "inconsistent_ohlc_samples": inconsistent_ohlc_samples,
+                    "inconsistent_ohlc_samples_truncated": excluded_inconsistent_ohlc_rows > len(inconsistent_ohlc_samples),
                 }},
                 source=self.name, issues=[issue],
             )
@@ -298,6 +311,8 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                 "as_of": latest_timestamp,
                 "excluded_no_trade_rows": excluded_no_trade_rows,
                 "excluded_inconsistent_ohlc_rows": excluded_inconsistent_ohlc_rows,
+                "inconsistent_ohlc_samples": inconsistent_ohlc_samples,
+                "inconsistent_ohlc_samples_truncated": excluded_inconsistent_ohlc_rows > len(inconsistent_ohlc_samples),
             },
             source=self.name, issues=issues,
         )
