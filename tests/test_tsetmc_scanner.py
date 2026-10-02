@@ -171,7 +171,15 @@ def test_scanner_aggregates_data_quality_rejection_reasons():
         assert result["candidate_count"] == 0
         assert result["rejected"][0]["data_quality"]["excluded_inconsistent_ohlc_rows"] == 11
         assert result["rejection_issue_counts"] == {
-            "too_many_inconsistent_daily_rows:excluded=11:traded_rows=220:allowed=1": 2
+            "too_many_inconsistent_daily_rows": 2
+        }
+        assert result["quality_summary"] == {
+            "symbols_with_quality_diagnostics": 2,
+            "traded_rows": 440,
+            "accepted_rows": 418,
+            "excluded_inconsistent_ohlc_rows": 22,
+            "allowed_inconsistent_ohlc_rows": 2,
+            "excluded_no_trade_rows": 0,
         }
 
     asyncio.run(run())
