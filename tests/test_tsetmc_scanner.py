@@ -59,6 +59,17 @@ def test_scanner_reports_rejected_symbols_and_error_details():
         assert result["rejected"][0]["issues"] == ["not_fresh"]
     asyncio.run(run())
 
+def test_scanner_keeps_instrument_id_on_rejected_symbol_for_source_audit():
+    async def run():
+        scanner = TsetmcMarketScanner(provider=FakeProvider())
+        async def universe():
+            return ([{"symbol": "خراب", "instrument_id": "12345678901234567"}], [])
+        scanner._universe = universe
+        result = await scanner.scan(limit=1)
+        assert result["rejected"][0]["instrument_id"] == "12345678901234567"
+        assert result["rejected"][0]["issues"] == ["not_fresh"]
+    asyncio.run(run())
+
 
 def test_market_watch_parses_realistic_payload_and_keeps_instrument_id():
     async def run():
