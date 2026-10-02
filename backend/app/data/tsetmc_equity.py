@@ -250,11 +250,22 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
         total_traded_rows = len(candles) + excluded_inconsistent_ohlc_rows
         tolerated_bad_rows = max(1, int(total_traded_rows * 0.005))
         if excluded_inconsistent_ohlc_rows > tolerated_bad_rows:
-            return self._unavailable(
+            issue = (
                 "too_many_inconsistent_daily_rows:"
                 f"excluded={excluded_inconsistent_ohlc_rows}:"
                 f"traded_rows={total_traded_rows}:"
                 f"allowed={tolerated_bad_rows}"
+            )
+            return MarketDataResult(
+                available=False, fresh=False, complete=False,
+                data={"quality": {
+                    "traded_rows": total_traded_rows,
+                    "accepted_rows": len(candles),
+                    "excluded_inconsistent_ohlc_rows": excluded_inconsistent_ohlc_rows,
+                    "allowed_inconsistent_ohlc_rows": tolerated_bad_rows,
+                    "excluded_no_trade_rows": excluded_no_trade_rows,
+                }},
+                source=self.name, issues=[issue],
             )
 
         candles.sort(key=lambda item: item["timestamp"])
