@@ -508,6 +508,13 @@ def test_tsetmc_provider_fails_closed_when_inconsistent_ohlc_rows_exceed_toleran
     assert result.issues == [
         "too_many_inconsistent_daily_rows:excluded=11:traded_rows=220:allowed=1"
     ]
+    assert result.data["quality"] == {
+        "traded_rows": 220,
+        "accepted_rows": 209,
+        "excluded_inconsistent_ohlc_rows": 11,
+        "allowed_inconsistent_ohlc_rows": 1,
+        "excluded_no_trade_rows": 0,
+    }
 
 
 def test_tsetmc_provider_retries_all_history_when_500_rows_are_empty():
