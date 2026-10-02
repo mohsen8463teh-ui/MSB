@@ -145,6 +145,34 @@ def test_tsetmc_provider_still_rejects_zero_prices_when_volume_is_positive():
     assert any("non_positive_price" in issue for issue in result.issues)
 
 
+
+def test_tsetmc_provider_quality_sample_exposes_raw_last_and_previous_close():
+    def handler(request):
+        if "Instrument/GetInstrumentSearch" in request.url.path:
+            return httpx.Response(200, json={"instrumentSearch": [
+                {"insCode": "12345678901234567", "lVal18AFC": "فملی"}
+            ]})
+        rows = history_rows()
+        for row in rows[1:4]:
+            row["pClosing"] = row["priceMin"] - 1
+            row["pDrCotVal"] = row["priceMin"]
+            row["priceYesterday"] = row["priceMin"] + 2
+        return httpx.Response(200, json={"closingPriceDaily": rows})
+
+    provider = TsetmcEquityMarketDataProvider(
+        transport=httpx.MockTransport(handler),
+        clock=lambda: NOW,
+    )
+    result = asyncio.run(provider.get_market_data("iran_equity", "فملی", "1d"))
+
+    assert result.available is False
+    assert result.data["quality"]["excluded_inconsistent_ohlc_rows"] == 3
+    sample = result.data["quality"]["inconsistent_ohlc_samples"][0]
+    assert sample["close"] == sample["low"] - 1
+    assert sample["last_trade"] == sample["low"]
+    assert sample["previous_close"] == sample["low"] + 2
+
+
 def test_tsetmc_provider_rejects_future_dated_history():
     def handler(request):
         if "Instrument/GetInstrumentSearch" in request.url.path:
