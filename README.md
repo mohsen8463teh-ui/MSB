@@ -54,6 +54,22 @@ request for an Iran equity symbol (for example, `فملی`) is then fetched by t
 API running on the phone, so TSETMC traffic originates from Termux rather than
 a GitHub runner. No external relay, VPS, or fabricated fallback data is used.
 
+For a bounded, read-only Iran-equity scan with per-symbol and aggregated
+history-quality diagnostics, run this from the repository root in the same
+Termux environment:
+
+```bash
+python scripts/tsetmc_scan_diagnostic.py --limit 5 --horizon 1w
+```
+
+The diagnostic is capped at 20 symbols and concurrency 2, defaults to 5 and 1,
+prints no candle history, and never submits orders. It inspects the first N
+resolvable symbols in source order; this is a connectivity/data-quality probe,
+not a representative market sample or a ranking of the full market. Its
+`quality_summary` and `rejected` fields help distinguish source-data problems
+from validation rejections. A partial scan is not evidence of complete market
+coverage.
+
 If the dashboard is hosted on a remote server instead, this local-only setup
 does not automatically connect that server to the phone. A secure relay or a
 deployment inside a reachable network would be a separate requirement; do not

@@ -1,0 +1,368 @@
+import asyncio
+import json
+
+import httpx
+import pytest
+
+from backend.app.analysis.tsetmc_scanner import TsetmcMarketScanner
+from backend.app.data.base import MarketDataResult
+
+
+def candles(count=220):
+    rows = []
+    for i in range(count):
+        close = 100 + i * 0.2
+        rows.append({"timestamp": 1_700_000_000 + i * 86400, "open": close,
+                     "high": close + 1, "low": close - 1, "close": close, "volume": 100 + i})
+    return rows
+
+
+class FakeProvider:
+    name = "fake_tsetmc"
+    base_urls = ("https://mock.tsetmc.test/api",)
+
+    async def get_market_data(self, market, symbol, horizon):
+        if symbol == "خراب":
+            return MarketDataResult(False, False, False, {}, self.name, ["not_fresh"])
+        data = candles()
+        return MarketDataResult(True, True, True,
+                                {"candles": data, "as_of": data[-1]["timestamp"]},
+                                self.name, [])
+
+
+def test_scanner_marks_limited_universe_as_partial():
+    async def run():
+        scanner = TsetmcMarketScanner(provider=FakeProvider())
+        async def universe():
+            return ([{"symbol": f"نماد{i}"} for i in range(3)], [])
+        scanner._universe = universe
+        result = await scanner.scan(limit=2, concurrency=2)
+        assert result["status"] == "PARTIAL_SCAN"
+        assert result["coverage"] == {"universe_count": 3, "selected_count": 2,
+                                      "offset": 0, "scanned_count": 2,
+                                      "coverage_fraction": 0.6667, "is_complete": False}
+        assert result["candidate_count"] == 2
+        assert all(x["decision"] == "NO_TRADE" and x["score_is_signal"] is False
+                   for x in result["candidates"])
+    asyncio.run(run())
+
+
+def test_scanner_reports_rejected_symbols_and_error_details():
+    async def run():
+        scanner = TsetmcMarketScanner(provider=FakeProvider())
+        async def universe():
+            return ([{"symbol": "خراب"}], [])
+        scanner._universe = universe
+        result = await scanner.scan(limit=1)
+        assert result["status"] == "NO_QUALITY_PASSING_CANDIDATES"
+        assert result["scanned_count"] == 1
+        assert result["rejected"][0]["issues"] == ["not_fresh"]
+    asyncio.run(run())
+
+def test_scanner_keeps_instrument_id_on_rejected_symbol_for_source_audit():
+    async def run():
+        scanner = TsetmcMarketScanner(provider=FakeProvider())
+        async def universe():
+            return ([{"symbol": "خراب", "instrument_id": "12345678901234567"}], [])
+        scanner._universe = universe
+        result = await scanner.scan(limit=1)
+        assert result["rejected"][0]["instrument_id"] == "12345678901234567"
+        assert result["rejected"][0]["issues"] == ["not_fresh"]
+    asyncio.run(run())
+
+
+def test_market_watch_parses_realistic_payload_and_keeps_instrument_id():
+    async def run():
+        def handler(request):
+            assert request.url.path.endswith("/ClosingPrice/GetMarketWatch")
+            return httpx.Response(200, json={"marketwatch": [
+                {"lVal18AFC": "نماد", "insCode": 12345678},
+                {"lVal18AFC": "نماد", "insCode": 12345678},
+                {"lVal18AFC": "نماد۲", "insCode": "87654321"},
+                {"lVal18AFC": ""},
+                None,
+            ]})
+        scanner = TsetmcMarketScanner(provider=FakeProvider(),
+                                      transport=httpx.MockTransport(handler))
+        symbols, issues = await scanner._universe()
+        assert symbols == [{"symbol": "نماد۲", "instrument_id": "87654321"}]
+        assert issues == ["market_watch_unresolved_rows:2",
+                          "market_watch_duplicate_symbols_excluded:1"]
+    asyncio.run(run())
+
+
+def test_market_watch_falls_back_to_webgw_items_payload():
+    async def run():
+        calls = []
+        def handler(request):
+            calls.append(request.url.host)
+            if request.url.host == "mock.tsetmc.test":
+                return httpx.Response(200, json={"unexpected": []})
+            assert request.url.path.endswith("/MarketWatchCash/fa")
+            return httpx.Response(200, json={"Items": [
+                {"instrumentId": "IRO1EXAMPLE0001", "instrumentName": "فملی"},
+                {"instrumentId": "IRO1EXAMPLE0002", "instrumentName": "فولاد"},
+            ]})
+        scanner = TsetmcMarketScanner(provider=FakeProvider(),
+                                      transport=httpx.MockTransport(handler))
+        symbols, issues = await scanner._universe()
+        assert symbols == [{"symbol": "فملی", "instrument_id": None},
+                           {"symbol": "فولاد", "instrument_id": None}]
+        assert issues == []
+        assert calls == ["mock.tsetmc.test", "webgw.tse.ir"]
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("payload", [[], {"marketwatch": {}}, {"wrong": []}])
+def test_market_watch_rejects_invalid_payload(payload):
+    async def run():
+        scanner = TsetmcMarketScanner(
+            provider=FakeProvider(),
+            transport=httpx.MockTransport(lambda request: httpx.Response(200, json=payload)))
+        with pytest.raises(ValueError):
+            await scanner._universe()
+    asyncio.run(run())
+
+
+def test_market_watch_falls_back_to_configured_cdn_mirror():
+    async def run():
+        calls = []
+        def handler(request):
+            calls.append(request.url.host)
+            if request.url.host == "mock.tsetmc.test":
+                return httpx.Response(503)
+            return httpx.Response(200, json={"marketwatch": [
+                {"lVal18AFC": "نماد", "insCode": "12345678"}
+            ]})
+        provider = FakeProvider()
+        provider.base_urls = ("https://mock.tsetmc.test/api", "https://mirror.tsetmc.test/api")
+        scanner = TsetmcMarketScanner(provider=provider,
+                                      transport=httpx.MockTransport(handler))
+        symbols, issues = await scanner._universe()
+        assert calls == ["mock.tsetmc.test", "mirror.tsetmc.test"]
+        assert symbols == [{"symbol": "نماد", "instrument_id": "12345678"}]
+        assert issues == []
+    asyncio.run(run())
+
+
+def test_market_watch_rejects_non_json_response():
+    async def run():
+        scanner = TsetmcMarketScanner(
+            provider=FakeProvider(),
+            transport=httpx.MockTransport(lambda request: httpx.Response(200, text="<html>")))
+        with pytest.raises(ValueError, match="invalid_tsetmc_market_watch_json"):
+            await scanner._universe()
+    asyncio.run(run())
+
+
+def test_scanner_rejects_invalid_limits():
+    async def run():
+        scanner = TsetmcMarketScanner(provider=FakeProvider())
+        with pytest.raises(ValueError):
+            await scanner.scan(limit=0)
+    asyncio.run(run())
+
+
+def test_scanner_aggregates_data_quality_rejection_reasons():
+    async def run():
+        class RejectedProvider(FakeProvider):
+            async def get_market_data(self, market, symbol, horizon):
+                return MarketDataResult(False, False, False,
+                    {"quality": {"traded_rows": 220, "accepted_rows": 209,
+                                 "excluded_inconsistent_ohlc_rows": 11,
+                                 "allowed_inconsistent_ohlc_rows": 1,
+                                 "excluded_no_trade_rows": 0}}, self.name,
+                    ["too_many_inconsistent_daily_rows:excluded=11:traded_rows=220:allowed=1"])
+
+        scanner = TsetmcMarketScanner(provider=RejectedProvider())
+        async def universe():
+            return ([{"symbol": "نماد۱"}, {"symbol": "نماد۲"}], [])
+        scanner._universe = universe
+        result = await scanner.scan(limit=2, concurrency=1)
+        assert result["candidate_count"] == 0
+        assert result["rejected"][0]["data_quality"]["excluded_inconsistent_ohlc_rows"] == 11
+        assert result["rejection_issue_counts"] == {
+            "too_many_inconsistent_daily_rows": 2
+        }
+        assert result["quality_summary"] == {
+            "symbols_with_quality_diagnostics": 2,
+            "traded_rows": 440,
+            "accepted_rows": 418,
+            "excluded_inconsistent_ohlc_rows": 22,
+            "allowed_inconsistent_ohlc_rows": 2,
+            "excluded_no_trade_rows": 0,
+        }
+
+    asyncio.run(run())
+
+def test_scanner_does_not_claim_complete_coverage_when_universe_has_unresolved_rows():
+    async def run():
+        scanner = TsetmcMarketScanner(provider=FakeProvider())
+        async def universe():
+            return ([{"symbol": "نماد"}], ["market_watch_unresolved_rows:1"])
+        scanner._universe = universe
+        result = await scanner.scan(limit=1)
+        assert result["status"] == "PARTIAL_SCAN"
+        assert result["coverage"]["coverage_fraction"] == 1.0
+        assert result["coverage"]["is_complete"] is False
+        assert result["universe_issues"] == ["market_watch_unresolved_rows:1"]
+    asyncio.run(run())
+
+
+def test_market_watch_excludes_all_rows_for_normalized_duplicate_symbols():
+    async def run():
+        def handler(request):
+            return httpx.Response(200, json={"marketwatch": [
+                {"lVal18AFC": "يک", "insCode": "111"},
+                {"lVal18AFC": "یک", "insCode": "222"},
+                {"lVal18AFC": "سالم", "insCode": "333"},
+            ]})
+        scanner = TsetmcMarketScanner(provider=FakeProvider(),
+                                      transport=httpx.MockTransport(handler))
+        symbols, issues = await scanner._universe()
+        assert symbols == [{"symbol": "سالم", "instrument_id": "333"}]
+        assert issues == ["market_watch_duplicate_symbols_excluded:1"]
+    asyncio.run(run())
+
+
+def test_duplicate_universe_issue_forces_partial_scan_even_at_full_coverage():
+    async def run():
+        scanner = TsetmcMarketScanner(provider=FakeProvider())
+        async def universe():
+            return ([{"symbol": "سالم"}],
+                    ["market_watch_duplicate_symbols_excluded:1"])
+        scanner._universe = universe
+        result = await scanner.scan(limit=1)
+        assert result["coverage"]["coverage_fraction"] == 1.0
+        assert result["coverage"]["is_complete"] is False
+        assert result["status"] == "PARTIAL_SCAN"
+        assert result["universe_issues"] == ["market_watch_duplicate_symbols_excluded:1"]
+    asyncio.run(run())
+
+
+def test_scanner_passes_market_watch_inscode_to_provider_and_keeps_it_in_result():
+    async def run():
+        class InstrumentIdProvider(FakeProvider):
+            def __init__(self):
+                self.calls = []
+
+            async def get_market_data_by_instrument_id(self, market, instrument_id, symbol, horizon):
+                self.calls.append((market, instrument_id, symbol, horizon))
+                data = candles()
+                return MarketDataResult(
+                    True, True, True,
+                    {"candles": data, "as_of": data[-1]["timestamp"]},
+                    self.name, [],
+                )
+
+        provider = InstrumentIdProvider()
+
+        def handler(request):
+            return httpx.Response(200, json={"marketwatch": [
+                {"lVal18AFC": "فملی", "insCode": "12345678901234567"}
+            ]})
+
+        scanner = TsetmcMarketScanner(
+            provider=provider,
+            transport=httpx.MockTransport(handler),
+        )
+        result = await scanner.scan(horizon="1w", limit=1, concurrency=1)
+
+        assert provider.calls == [
+            ("iran_equity", "12345678901234567", "فملی", "1w")
+        ]
+        assert result["scanned_count"] == 1
+        assert result["candidate_count"] == 1
+        assert result["candidates"][0]["instrument_id"] == "12345678901234567"
+        assert result["candidates"][0]["decision"] == "NO_TRADE"
+        assert result["candidates"][0]["score_is_signal"] is False
+
+    asyncio.run(run())
+
+
+def test_end_to_end_market_watch_to_history_to_analysis_uses_inscode():
+    from datetime import date, datetime, timedelta
+    from zoneinfo import ZoneInfo
+    from urllib.parse import unquote
+    from backend.app.data.tsetmc_equity import TsetmcEquityMarketDataProvider
+
+    tehran = ZoneInfo("Asia/Tehran")
+    now = datetime(2025, 1, 3, 12, 0, tzinfo=tehran).timestamp()
+    end = date(2025, 1, 2)
+    history = []
+    for index in range(220):
+        day = end - timedelta(days=index)
+        close = 100.0 + index
+        history.append({
+            "dEven": int(day.strftime("%Y%m%d")),
+            "priceFirst": close - 0.2,
+            "priceMax": close + 0.5,
+            "priceMin": close - 0.5,
+            "pClosing": close,
+            "qTotTran5J": 1000,
+        })
+    history.insert(0, {
+        "dEven": 20250103, "priceFirst": 1000, "priceMax": 1010,
+        "priceMin": 990, "pClosing": 1005, "qTotTran5J": 500,
+    })
+    requested = []
+
+    def handler(request):
+        path = unquote(request.url.path)
+        requested.append(path)
+        if path.endswith("/ClosingPrice/GetMarketWatch"):
+            return httpx.Response(200, json={"marketwatch": [
+                {"lVal18AFC": "فملی", "insCode": "12345678901234567"}
+            ]})
+        if path.endswith("/ClosingPrice/GetClosingPriceDailyList/12345678901234567/500"):
+            return httpx.Response(200, json={"closingPriceDaily": history})
+        raise AssertionError(f"Unexpected URL: {request.url}")
+
+    transport = httpx.MockTransport(handler)
+    provider = TsetmcEquityMarketDataProvider(
+        base_url="https://mock.tsetmc.test/api",
+        fallback_base_urls=(),
+        transport=transport,
+        clock=lambda: now,
+    )
+    scanner = TsetmcMarketScanner(provider=provider, transport=transport)
+    result = asyncio.run(scanner.scan(horizon="1w", limit=1, concurrency=1))
+
+    assert requested == [
+        "/api/ClosingPrice/GetMarketWatch",
+        "/api/ClosingPrice/GetClosingPriceDailyList/12345678901234567/500",
+    ]
+    assert result["status"] == "SCAN_COMPLETED"
+    assert result["coverage"]["is_complete"] is True
+    assert result["scanned_count"] == result["candidate_count"] == 1
+    candidate = result["candidates"][0]
+    assert candidate["symbol"] == "فملی"
+    assert candidate["instrument_id"] == "12345678901234567"
+    assert candidate["data_as_of"] == datetime(2025, 1, 2, 12, 0, tzinfo=tehran).timestamp()
+    assert candidate["decision"] == "NO_TRADE"
+    assert candidate["score_is_signal"] is False
+
+
+def test_scanner_offset_inspects_later_source_order_slice_and_marks_partial():
+    async def run():
+        scanner = TsetmcMarketScanner(provider=FakeProvider())
+        async def universe():
+            return ([{"symbol": f"نماد{i}"} for i in range(6)], [])
+        scanner._universe = universe
+        result = await scanner.scan(limit=2, offset=3, concurrency=1)
+        assert [item["symbol"] for item in result["candidates"]] == ["نماد3", "نماد4"]
+        assert result["coverage"]["offset"] == 3
+        assert result["coverage"]["universe_count"] == 6
+        assert result["coverage"]["selected_count"] == 2
+        assert result["coverage"]["scanned_count"] == 2
+        assert result["coverage"]["is_complete"] is False
+        assert result["status"] == "PARTIAL_SCAN"
+    asyncio.run(run())
+
+
+def test_scanner_rejects_negative_offset():
+    async def run():
+        scanner = TsetmcMarketScanner(provider=FakeProvider())
+        with pytest.raises(ValueError, match="offset_must_be_a_non_negative_integer"):
+            await scanner.scan(offset=-1)
+    asyncio.run(run())

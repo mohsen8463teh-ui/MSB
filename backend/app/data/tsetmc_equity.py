@@ -80,6 +80,8 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
         market: str | None,
         symbol: str | None,
         horizon: str | None,
+        *,
+        _instrument_id: str | None = None,
     ) -> MarketDataResult:
         if market != "iran_equity":
             return self._unavailable("unsupported_market")
@@ -121,43 +123,58 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                     headers=headers,
                     follow_redirects=True,
                 ) as client:
-                    search_path = (
-                        "/Instrument/GetInstrumentSearch/"
-                        + quote(symbol.strip(), safe="")
-                    )
-                    search_response = await client.get(search_path)
-                    search_response.raise_for_status()
-                    candidate_search = search_response.json()
-                    if not isinstance(candidate_search, dict):
-                        last_payload_error = ValueError("invalid instrument search payload")
-                        continue
-                    matches = candidate_search.get("instrumentSearch")
-                    if not isinstance(matches, list):
-                        last_payload_error = ValueError("invalid instrument search payload")
-                        continue
-                    exact = [
-                        item for item in matches
-                        if isinstance(item, dict)
-                        and _normalize_symbol(str(item.get("lVal18AFC", "")))
-                        == _normalize_symbol(symbol)
-                    ]
-                    if len(exact) == 0:
-                        return self._unavailable("instrument_not_found")
-                    if len(exact) > 1:
-                        return self._unavailable("ambiguous_instrument_symbol")
-                    candidate_id = str(exact[0].get("insCode", ""))
-                    if not re.fullmatch(r"\d{8,20}", candidate_id):
-                        return self._unavailable("invalid_instrument_identifier")
-                    history_response = await client.get(
-                        f"/ClosingPrice/GetClosingPriceDailyList/{candidate_id}/500"
-                    )
-                    history_response.raise_for_status()
-                    candidate_history = history_response.json()
-                    if not isinstance(candidate_history, dict):
-                        last_payload_error = ValueError("invalid daily history payload")
-                        continue
-                    if not isinstance(candidate_history.get("closingPriceDaily"), list):
-                        last_payload_error = ValueError("invalid daily history payload")
+                    if _instrument_id is not None:
+                        candidate_id = str(_instrument_id)
+                        if not re.fullmatch(r"\d{8,20}", candidate_id):
+                            return self._unavailable("invalid_instrument_identifier")
+                        candidate_search = {"instrumentSearch": [{"insCode": candidate_id, "lVal18AFC": symbol}]}
+                    else:
+                        search_path = (
+                            "/Instrument/GetInstrumentSearch/"
+                            + quote(symbol.strip(), safe="")
+                        )
+                        search_response = await client.get(search_path)
+                        search_response.raise_for_status()
+                        candidate_search = search_response.json()
+                        if not isinstance(candidate_search, dict):
+                            last_payload_error = ValueError("invalid instrument search payload")
+                            continue
+                        matches = candidate_search.get("instrumentSearch")
+                        if not isinstance(matches, list):
+                            last_payload_error = ValueError("invalid instrument search payload")
+                            continue
+                        exact = [
+                            item for item in matches
+                            if isinstance(item, dict)
+                            and _normalize_symbol(str(item.get("lVal18AFC", "")))
+                            == _normalize_symbol(symbol)
+                        ]
+                        if len(exact) == 0:
+                            return self._unavailable("instrument_not_found")
+                        if len(exact) > 1:
+                            return self._unavailable("ambiguous_instrument_symbol")
+                        candidate_id = str(exact[0].get("insCode", ""))
+                        if not re.fullmatch(r"\d{8,20}", candidate_id):
+                            return self._unavailable("invalid_instrument_identifier")
+                    candidate_history = None
+                    for top in (500, 0):
+                        history_response = await client.get(
+                            f"/ClosingPrice/GetClosingPriceDailyList/{candidate_id}/{top}"
+                        )
+                        history_response.raise_for_status()
+                        payload = history_response.json()
+                        if not isinstance(payload, dict) or not isinstance(payload.get("closingPriceDaily"), list):
+                            last_payload_error = ValueError("invalid daily history payload")
+                            break
+                        if not payload["closingPriceDaily"]:
+                            # An HTTP 200 with an empty 500-row response is not proof
+                            # that the instrument has no history. Retry once using
+                            # TSETMC's documented 0=all-history form before failing over.
+                            last_payload_error = ValueError("empty daily history payload")
+                            continue
+                        candidate_history = payload
+                        break
+                    if candidate_history is None:
                         continue
                     search_payload = candidate_search
                     history_payload = candidate_history
@@ -183,6 +200,7 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                 payload_issue = {
                     "invalid instrument search payload": "invalid_instrument_search_payload",
                     "invalid daily history payload": "invalid_daily_history_payload",
+                    "empty daily history payload": "empty_daily_history",
                 }.get(str(last_payload_error), "invalid_tsetmc_json_payload")
                 return self._unavailable(payload_issue)
             return self._unavailable("tsetmc_all_hosts_unavailable")
@@ -190,6 +208,7 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
         candles = []
         excluded_no_trade_rows = 0
         excluded_inconsistent_ohlc_rows = 0
+        inconsistent_ohlc_samples = []
         for row in rows:
             if not isinstance(row, dict):
                 return self._unavailable("malformed_daily_history_row")
@@ -226,13 +245,43 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
             row_check = validate_ohlcv([candle], now=now)
             if row_check["issues"] == ["candle_0_inconsistent_ohlc"]:
                 excluded_inconsistent_ohlc_rows += 1
+                if len(inconsistent_ohlc_samples) < 5:
+                    inconsistent_ohlc_samples.append({
+                        "date": trading_date.isoformat(),
+                        "open": candle["open"],
+                        "high": candle["high"],
+                        "low": candle["low"],
+                        "close": candle["close"],
+                        "last_trade": row.get("pDrCotVal"),
+                        "previous_close": row.get("priceYesterday"),
+                        "volume": candle["volume"],
+                        "issue": "inconsistent_ohlc",
+                    })
                 continue
             candles.append(candle)
 
         total_traded_rows = len(candles) + excluded_inconsistent_ohlc_rows
         tolerated_bad_rows = max(1, int(total_traded_rows * 0.005))
         if excluded_inconsistent_ohlc_rows > tolerated_bad_rows:
-            return self._unavailable("too_many_inconsistent_daily_rows")
+            issue = (
+                "too_many_inconsistent_daily_rows:"
+                f"excluded={excluded_inconsistent_ohlc_rows}:"
+                f"traded_rows={total_traded_rows}:"
+                f"allowed={tolerated_bad_rows}"
+            )
+            return MarketDataResult(
+                available=False, fresh=False, complete=False,
+                data={"quality": {
+                    "traded_rows": total_traded_rows,
+                    "accepted_rows": len(candles),
+                    "excluded_inconsistent_ohlc_rows": excluded_inconsistent_ohlc_rows,
+                    "allowed_inconsistent_ohlc_rows": tolerated_bad_rows,
+                    "excluded_no_trade_rows": excluded_no_trade_rows,
+                    "inconsistent_ohlc_samples": inconsistent_ohlc_samples,
+                    "inconsistent_ohlc_samples_truncated": excluded_inconsistent_ohlc_rows > len(inconsistent_ohlc_samples),
+                }},
+                source=self.name, issues=[issue],
+            )
 
         candles.sort(key=lambda item: item["timestamp"])
         checked = validate_ohlcv(candles, now=now)
@@ -264,8 +313,24 @@ class TsetmcEquityMarketDataProvider(MarketDataProvider):
                 "as_of": latest_timestamp,
                 "excluded_no_trade_rows": excluded_no_trade_rows,
                 "excluded_inconsistent_ohlc_rows": excluded_inconsistent_ohlc_rows,
+                "inconsistent_ohlc_samples": inconsistent_ohlc_samples,
+                "inconsistent_ohlc_samples_truncated": excluded_inconsistent_ohlc_rows > len(inconsistent_ohlc_samples),
             },
             source=self.name, issues=issues,
+        )
+
+    async def get_market_data_by_instrument_id(
+        self,
+        market: str | None,
+        instrument_id: str | None,
+        symbol: str | None,
+        horizon: str | None,
+    ) -> MarketDataResult:
+        """Fetch history directly by the market-watch instrument ID, without symbol search."""
+        if not isinstance(instrument_id, str) or not re.fullmatch(r"\d{8,20}", instrument_id):
+            return self._unavailable("invalid_instrument_identifier")
+        return await self.get_market_data(
+            market, symbol, horizon, _instrument_id=instrument_id
         )
 
     def _unavailable(self, issue: str) -> MarketDataResult:

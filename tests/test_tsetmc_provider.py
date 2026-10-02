@@ -145,6 +145,34 @@ def test_tsetmc_provider_still_rejects_zero_prices_when_volume_is_positive():
     assert any("non_positive_price" in issue for issue in result.issues)
 
 
+
+def test_tsetmc_provider_quality_sample_exposes_raw_last_and_previous_close():
+    def handler(request):
+        if "Instrument/GetInstrumentSearch" in request.url.path:
+            return httpx.Response(200, json={"instrumentSearch": [
+                {"insCode": "12345678901234567", "lVal18AFC": "فملی"}
+            ]})
+        rows = history_rows()
+        for row in rows[1:4]:
+            row["pClosing"] = row["priceMin"] - 1
+            row["pDrCotVal"] = row["priceMin"]
+            row["priceYesterday"] = row["priceMin"] + 2
+        return httpx.Response(200, json={"closingPriceDaily": rows})
+
+    provider = TsetmcEquityMarketDataProvider(
+        transport=httpx.MockTransport(handler),
+        clock=lambda: NOW,
+    )
+    result = asyncio.run(provider.get_market_data("iran_equity", "فملی", "1d"))
+
+    assert result.available is False
+    assert result.data["quality"]["excluded_inconsistent_ohlc_rows"] == 3
+    sample = result.data["quality"]["inconsistent_ohlc_samples"][0]
+    assert sample["close"] == sample["low"] - 1
+    assert sample["last_trade"] == sample["low"]
+    assert sample["previous_close"] == sample["low"] + 2
+
+
 def test_tsetmc_provider_rejects_future_dated_history():
     def handler(request):
         if "Instrument/GetInstrumentSearch" in request.url.path:
@@ -299,6 +327,7 @@ def test_tsetmc_provider_rejects_malformed_search_payload(search_json, expected_
     [
         ([], "invalid_daily_history_payload"),
         ({"closingPriceDaily": {}}, "invalid_daily_history_payload"),
+        ({"closingPriceDaily": []}, "empty_daily_history"),
         ({"closingPriceDaily": [None]}, "malformed_daily_history_row"),
         ({"closingPriceDaily": [{"dEven": "not-a-date"}]}, "invalid_daily_history_date"),
     ],
@@ -504,4 +533,101 @@ def test_tsetmc_provider_fails_closed_when_inconsistent_ohlc_rows_exceed_toleran
     result = asyncio.run(provider.get_market_data("iran_equity", "فملی", "1d"))
 
     assert result.available is False
-    assert result.issues == ["too_many_inconsistent_daily_rows"]
+    assert result.issues == [
+        "too_many_inconsistent_daily_rows:excluded=11:traded_rows=220:allowed=1"
+    ]
+    quality = result.data["quality"]
+    assert quality["traded_rows"] == 220
+    assert quality["accepted_rows"] == 209
+    assert quality["excluded_inconsistent_ohlc_rows"] == 11
+    assert quality["allowed_inconsistent_ohlc_rows"] == 1
+    assert quality["excluded_no_trade_rows"] == 0
+    assert len(quality["inconsistent_ohlc_samples"]) == 5
+    assert quality["inconsistent_ohlc_samples_truncated"] is True
+    sample = quality["inconsistent_ohlc_samples"][0]
+    assert sample == {
+        "date": "2025-01-02",
+        "open": 99.8,
+        "high": 1,
+        "low": 99.5,
+        "close": 100.0,
+        "last_trade": None,
+        "previous_close": None,
+        "volume": 1000,
+        "issue": "inconsistent_ohlc",
+    }
+
+
+def test_tsetmc_provider_retries_all_history_when_500_rows_are_empty():
+    seen_paths = []
+
+    def handler(request):
+        path = unquote(request.url.path)
+        seen_paths.append(path)
+        if "Instrument/GetInstrumentSearch" in path:
+            return httpx.Response(200, json={"instrumentSearch": [
+                {"insCode": "12345678901234567", "lVal18AFC": "فملی"}
+            ]})
+        if path.endswith("/ClosingPrice/GetClosingPriceDailyList/12345678901234567/500"):
+            return httpx.Response(200, json={"closingPriceDaily": []})
+        if path.endswith("/ClosingPrice/GetClosingPriceDailyList/12345678901234567/0"):
+            return httpx.Response(200, json={"closingPriceDaily": history_rows()})
+        raise AssertionError(f"Unexpected URL: {request.url}")
+
+    provider = TsetmcEquityMarketDataProvider(
+        transport=httpx.MockTransport(handler),
+        clock=lambda: NOW,
+        fallback_base_urls=(),
+    )
+    result = asyncio.run(provider.get_market_data("iran_equity", "فملی", "1d"))
+
+    assert result.available is True
+    assert result.complete is True
+    assert len(result.data["candles"]) == 220
+    assert seen_paths == [
+        "/api/Instrument/GetInstrumentSearch/فملی",
+        "/api/ClosingPrice/GetClosingPriceDailyList/12345678901234567/500",
+        "/api/ClosingPrice/GetClosingPriceDailyList/12345678901234567/0",
+    ]
+
+
+
+def test_tsetmc_provider_uses_market_watch_instrument_id_without_symbol_search():
+    requested = []
+
+    def handler(request):
+        path = unquote(request.url.path)
+        requested.append(path)
+        if path.endswith("/ClosingPrice/GetClosingPriceDailyList/98765432101234567/500"):
+            return httpx.Response(200, json={"closingPriceDaily": history_rows()})
+        raise AssertionError(f"Unexpected URL: {request.url}")
+
+    provider = TsetmcEquityMarketDataProvider(
+        transport=httpx.MockTransport(handler),
+        clock=lambda: NOW,
+        fallback_base_urls=(),
+    )
+    result = asyncio.run(
+        provider.get_market_data_by_instrument_id(
+            "iran_equity", "98765432101234567", "فملی", "1w"
+        )
+    )
+
+    assert result.available is True
+    assert result.data["instrument_id"] == "98765432101234567"
+    assert result.data["symbol"] == "فملی"
+    assert requested == [
+        "/api/ClosingPrice/GetClosingPriceDailyList/98765432101234567/500"
+    ]
+
+
+@pytest.mark.parametrize("bad_id", [None, "", "123", "12345678x", "123456789012345678901", 12345678901234567])
+def test_tsetmc_provider_rejects_invalid_market_watch_instrument_id(bad_id):
+    provider = TsetmcEquityMarketDataProvider(clock=lambda: NOW)
+    result = asyncio.run(
+        provider.get_market_data_by_instrument_id(
+            "iran_equity", bad_id, "فملی", "1w"
+        )
+    )
+    assert result.available is False
+    assert result.issues == ["invalid_instrument_identifier"]

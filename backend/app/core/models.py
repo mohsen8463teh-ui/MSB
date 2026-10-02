@@ -39,8 +39,11 @@ class AnalysisResponse(BaseModel):
     risk_reward: Any | None = None
     indicators: dict[str, Any] | None = None
     evidence: list[str] = Field(default_factory=list)
+    counter_evidence: list[str] = Field(default_factory=list)
     reasoning: list[str] = Field(default_factory=list)
+    uncertainty: list[str] = Field(default_factory=list)
     invalidation: list[str] = Field(default_factory=list)
+    no_trade_reason: str | None = None
 
     data_quality: DataQuality
     signal_id: str | None = None

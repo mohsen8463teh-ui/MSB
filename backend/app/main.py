@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+import httpx
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
@@ -7,6 +8,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .analysis.indicators import calculate_indicators
+from .analysis.tsetmc_scanner import TsetmcMarketScanner
 from .backtest.research_report import evaluate_research_universe
 from .core.intent import resolve_intent
 from .core.journal import create_journal_record
@@ -234,4 +236,22 @@ async def analyze(request: AnalyzeRequest):
     return AnalysisResponse(protocol_version=PROTOCOL_VERSION, decision="NO_TRADE", market=request.market,
         symbol=request.symbol.upper() if request.symbol else None, horizon=horizon, data_source=market_data.source,
         data_as_of=market_data.data.get("as_of"), indicators=indicators, evidence=evidence, reasoning=reasoning,
+        counter_evidence=[],
+        uncertainty=["No validated strategy is enabled for this market and horizon.", "Descriptive indicators do not establish a repeatable trading edge."],
+        no_trade_reason="NO_VALIDATED_STRATEGY",
         invalidation=["An actionable signal requires a validated strategy and verified data."], data_quality=quality)
+
+
+@app.get("/v1/scan/iran-equities")
+async def scan_iran_equities(
+    horizon: str = Query("1w", pattern="^(1d|3d|1w|1m|3m|5m|6m|1y)$"),
+    limit: int = Query(120, ge=1, le=6000),
+    concurrency: int = Query(4, ge=1, le=12),
+):
+    """Read-only TSETMC market-wide scan; rankings are not trade signals."""
+    try:
+        return await TsetmcMarketScanner(provider=iran_equity_provider).scan(
+            horizon=horizon, limit=limit, concurrency=concurrency
+        )
+    except (ValueError, httpx.HTTPError) as error:
+        raise HTTPException(status_code=502, detail="TSETMC market scan unavailable") from error
