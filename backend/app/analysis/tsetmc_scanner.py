@@ -134,7 +134,11 @@ class TsetmcMarketScanner:
                     else:
                         data = await self.provider.get_market_data("iran_equity", symbol, horizon)
                     if not (data.available and data.fresh and data.complete):
-                        rejection = {"symbol": symbol, "issues": data.issues or ["data_quality_gate_failed"]}
+                        rejection = {
+                            "symbol": symbol,
+                            "instrument_id": item.get("instrument_id"),
+                            "issues": data.issues or ["data_quality_gate_failed"],
+                        }
                         if isinstance(data.data, dict) and isinstance(data.data.get("quality"), dict):
                             rejection["data_quality"] = data.data["quality"]
                         return None, rejection
@@ -150,7 +154,13 @@ class TsetmcMarketScanner:
                             "data_as_of": data.data.get("as_of"), "source": data.source,
                             "decision": "NO_TRADE", "score_is_signal": False}, None
                 except Exception as exc:
-                    return None, {"symbol": symbol, "issues": ["scan_error"], "error_type": type(exc).__name__, "error": str(exc)[:240]}
+                    return None, {
+                        "symbol": symbol,
+                        "instrument_id": item.get("instrument_id"),
+                        "issues": ["scan_error"],
+                        "error_type": type(exc).__name__,
+                        "error": str(exc)[:240],
+                    }
 
         selected = universe[offset:offset + limit]
         results = await asyncio.gather(*(inspect(item) for item in selected))
