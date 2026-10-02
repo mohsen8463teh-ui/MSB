@@ -163,14 +163,34 @@ class TsetmcMarketScanner:
         partial = len(selected) < len(universe) or bool(universe_issues)
         status = "PARTIAL_SCAN" if partial else ("SCAN_COMPLETED" if accepted else "NO_QUALITY_PASSING_CANDIDATES")
         rejection_issue_counts = {}
+        quality_summary = {
+            "symbols_with_quality_diagnostics": 0,
+            "traded_rows": 0,
+            "accepted_rows": 0,
+            "excluded_inconsistent_ohlc_rows": 0,
+            "allowed_inconsistent_ohlc_rows": 0,
+            "excluded_no_trade_rows": 0,
+        }
         for item in rejected:
             for issue in item.get("issues", []):
-                rejection_issue_counts[issue] = rejection_issue_counts.get(issue, 0) + 1
+                issue_code = issue.split(":", 1)[0]
+                rejection_issue_counts[issue_code] = rejection_issue_counts.get(issue_code, 0) + 1
+            quality = item.get("data_quality")
+            if isinstance(quality, dict):
+                quality_summary["symbols_with_quality_diagnostics"] += 1
+                for field in (
+                    "traded_rows", "accepted_rows",
+                    "excluded_inconsistent_ohlc_rows",
+                    "allowed_inconsistent_ohlc_rows", "excluded_no_trade_rows",
+                ):
+                    value = quality.get(field)
+                    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                        quality_summary[field] += value
         return {"status": status, "coverage": {"universe_count": len(universe), "selected_count": len(selected),
                 "scanned_count": len(results), "coverage_fraction": round(len(results) / len(universe), 4) if universe else 0.0,
                 "is_complete": not partial},
                 "market": "iran_equity", "horizon": horizon, "universe_count": len(universe),
                 "selected_count": len(selected), "scanned_count": len(results),
-                "candidate_count": len(accepted), "candidates": accepted, "rejected": rejected, "rejection_issue_counts": dict(sorted(rejection_issue_counts.items())),
+                "candidate_count": len(accepted), "candidates": accepted, "rejected": rejected, "rejection_issue_counts": dict(sorted(rejection_issue_counts.items())), "quality_summary": quality_summary,
                 "universe_issues": universe_issues, "research_only": True,
                 "notice": "Ranking is descriptive only; no validated strategy is enabled and no order is authorized."}
